@@ -26,7 +26,7 @@ const contractorNav = [
   ['Settings', '/app/contractor#settings', Settings],
 ];
 
-export default function AppShell({ role = 'worker', children }) {
+export default function AppShell({ role = 'worker', children, user = { initials: 'AA', name: 'Austin A.' } }) {
   const items = role === 'contractor' ? contractorNav : workerNav;
   return (
     <div className="app-layout">
@@ -48,9 +48,9 @@ export default function AppShell({ role = 'worker', children }) {
           <div className="topbar-actions">
             <button className="icon-button" aria-label="Notifications"><Bell size={19}/></button>
             <div className="account-pill">
-              <div className="avatar">AA</div>
+              <div className="avatar">{user.initials}</div>
               <div>
-                <strong>Austin A.</strong>
+                <strong>{user.name}</strong>
                 <span>{role === 'contractor' ? 'Chrome Construction' : 'Subcontractor'}</span>
               </div>
             </div>
