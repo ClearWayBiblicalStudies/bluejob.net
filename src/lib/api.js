@@ -1,20 +1,14 @@
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-let token = typeof window !== 'undefined' ? window.localStorage.getItem('bluejob_access_token') : null;
-export function setToken(value) {
-  token = value || null;
-  if (typeof window !== 'undefined') {
-    if (token) window.localStorage.setItem('bluejob_access_token', token);
-    else window.localStorage.removeItem('bluejob_access_token');
-  }
-}
+export function setToken() {}
 async function request(path, options = {}) {
-  const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: ['Bearer', token].join(' ') } : {}), ...options.headers };
-  const response = await fetch(`${API}${path}`, { ...options, headers });
+  const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers };
+  const response = await fetch(`${API}${path}`, { ...options, headers, credentials: 'include' });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
 export const api = {
+  logout: () => request('/auth/logout', { method: 'POST' }),
   signin: (body) => request('/auth/signin', { method: 'POST', body: JSON.stringify(body) }),
   signup: (body) => request('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request('/auth/me'),

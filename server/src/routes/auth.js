@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../lib/db.js';
-import { signUser, requireAuth } from '../lib/auth.js';
+import { signUser, requireAuth, setAuthCookie, clearAuthCookie, revokeToken } from '../lib/auth.js';
 import crypto from 'node:crypto';
 const router = Router();
 
@@ -11,7 +11,8 @@ router.post('/signup', async (req, res) => {
   const hash = await bcrypt.hash(password, 12);
   try {
     const { rows } = await pool.query('INSERT INTO users (name,email,password_hash,role) VALUES ($1,$2,$3,$4) RETURNING id,name,email,role,organization_id,email_verified,mfa_enabled', [name, email.toLowerCase(), hash, role === 'CONTRACTOR' ? 'CONTRACTOR' : 'WORKER']);
-    res.status(201).json({ user: rows[0], token: signUser(rows[0]) });
+    const token = signUser(rows[0]); setAuthCookie(res, token);
+    res.status(201).json({ user: rows[0] });
   } catch (e) { res.status(e.code === '23505' ? 409 : 500).json({ error: e.code === '23505' ? 'Email already registered' : 'Unable to create account' }); }
 });
 router.post('/signin', async (req, res) => {
@@ -20,12 +21,18 @@ router.post('/signin', async (req, res) => {
   if (!rows[0] || !(await bcrypt.compare(password || '', rows[0].password_hash))) return res.status(401).json({ error: 'Invalid email or password' });
   const { password_hash, mfa_secret, ...user } = rows[0];
   if (user.mfa_enabled) return res.json({ mfaRequired: true, challenge: crypto.randomUUID(), userId: user.id });
-  res.json({ user, token: signUser(user) });
+  const token = signUser(user); setAuthCookie(res, token);
+  res.json({ user });
 });
 router.post('/mfa/verify-login', async (req,res) => {
   const { rows } = await pool.query('SELECT id,name,email,role,organization_id,mfa_secret FROM users WHERE id=$1 AND mfa_enabled=true',[req.body.userId]);
   if (!rows[0] || !validTotp(rows[0].mfa_secret, req.body.code)) return res.status(401).json({error:'Invalid MFA code'});
-  const {mfa_secret, ...user} = rows[0]; res.json({user, token: signUser(user)});
+  const {mfa_secret, ...user} = rows[0]; const token = signUser(user); setAuthCookie(res, token); res.json({user});
+});
+router.post('/logout', requireAuth, (req, res) => {
+  const token = String(req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith('bluejob_access='))?.slice('bluejob_access='.length);
+  if (token) revokeToken(decodeURIComponent(token));
+  clearAuthCookie(res); res.status(204).end();
 });
 function validTotp(secret, value) {
   const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits=''; for (const c of secret.replace(/=+$/,'').toUpperCase()) bits += alphabet.indexOf(c).toString(2).padStart(5,'0');
