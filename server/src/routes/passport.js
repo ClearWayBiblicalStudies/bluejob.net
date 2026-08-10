@@ -1,8 +1,11 @@
 import { Router } from 'express';
+import fs from 'node:fs';
 import multer from 'multer';
 import { pool } from '../lib/db.js';
 import { requireAuth } from '../lib/auth.js';
-const upload = multer({ dest: process.env.UPLOAD_DIR || 'uploads', limits: { fileSize: 10 * 1024 * 1024 } });
+const uploadDirectory = process.env.UPLOAD_DIR || 'uploads';
+fs.mkdirSync(uploadDirectory, { recursive: true });
+const upload = multer({ dest: uploadDirectory, limits: { fileSize: 10 * 1024 * 1024 } });
 const router = Router(); router.use(requireAuth);
 router.get('/', async (req, res) => { const { rows } = await pool.query('SELECT * FROM passports WHERE user_id=$1', [req.user.sub]); res.json({ passport: rows[0] || null }); });
 router.put('/', async (req, res) => {
