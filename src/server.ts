@@ -1,5 +1,5 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { calculateWorkScore } from "./scoring.js";
 import jobBidRoutes from "./routes/job-bids.js";
@@ -72,7 +72,7 @@ app.post("/workers/:workerId/evidence", async (req, res) => {
       monetaryValueCents: data.monetaryValueCents,
       occurredAt: data.occurredAt ? new Date(data.occurredAt) : undefined,
       confidence: data.confidence,
-      metadata: data.metadata,
+      metadata: data.metadata as Prisma.InputJsonValue | undefined,
       status: data.confidence >= 0.5 ? "VERIFIED" : "PENDING",
       verifiedAt: data.confidence >= 0.5 ? new Date() : undefined
     }
