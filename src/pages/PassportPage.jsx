@@ -22,7 +22,7 @@ export default function PassportPage() {
           <div className="passport-avatar">{displayName.slice(0, 2).toUpperCase()}</div>
           <div><h2>{displayName}</h2><p>{passport.trade || 'Trade not added yet'} · {passport.workerType}</p><span className="location-line"><MapPin size={14}/>{passport.location || 'Location not added yet'} {passport.travelRadius && `· Travels ${passport.travelRadius} miles`}</span></div>
         </div>
-        <div className="passport-score"><ScoreRing score={verified ? 600 + verified * 50 : 0}/><strong>WORK SCORE</strong><span>BUILDING</span></div>
+        <div className="passport-score"><ScoreRing score={Math.min(900, verified ? 600 + verified * 50 : 0)}/><strong>WORK SCORE</strong><span>BUILDING</span></div>
       </section>
       <section className="passport-grid">
         <article className="card passport-panel"><div className="section-heading"><h2>Professional details</h2><BadgeCheck className="green-text"/></div><div className="detail-grid"><div><span>Years of experience</span><strong>{passport.yearsExperience || 'Not added'}</strong></div><div><span>Crew size</span><strong>{passport.crewSize || 'Not added'}</strong></div><div><span>Availability</span><strong>{passport.availability || 'Not added'}</strong></div><div><span>Transportation</span><strong>{passport.transportation || 'Not added'}</strong></div></div><h3>Skills</h3><div className="tag-list">{skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <span className="muted-text">Add skills to start matching.</span>}</div></article>

@@ -13,6 +13,7 @@ import PassportEditPage from './pages/PassportEditPage';
 import VerificationPage from './pages/VerificationPage';
 
 function AdminRoute() {
+  // This demo guard is replaced by server-side authorization before launch.
   const isSuperAdmin = sessionStorage.getItem('bluejob-role') === 'SUPER_ADMIN';
   return isSuperAdmin ? <AdminDashboard /> : <Navigate to="/signin" replace />;
 }
