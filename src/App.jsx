@@ -12,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import PassportPage from './pages/PassportPage';
 import PassportEditPage from './pages/PassportEditPage';
 import VerificationPage from './pages/VerificationPage';
+import AccountSecurityPage from './pages/AccountSecurityPage';
 import { api } from './lib/api';
 
 function AdminRoute() {
@@ -31,6 +32,7 @@ export default function App() {
       <Route path="/app/passport" element={<PassportPage />} />
       <Route path="/app/passport/edit" element={<PassportEditPage />} />
       <Route path="/app/verification" element={<VerificationPage />} />
+      <Route path="/app/security" element={<AccountSecurityPage />} />
       <Route path="/app/contractor" element={<ContractorDashboard />} />
       <Route path="/app/post-job" element={<PostJobPage />} />
       <Route path="/app/jobs/:jobId/bids" element={<BidDetailPage />} />

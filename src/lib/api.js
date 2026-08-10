@@ -1,6 +1,12 @@
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-let token = null;
-export function setToken(value) { token = value; }
+let token = typeof window !== 'undefined' ? window.localStorage.getItem('bluejob_access_token') : null;
+export function setToken(value) {
+  token = value || null;
+  if (typeof window !== 'undefined') {
+    if (token) window.localStorage.setItem('bluejob_access_token', token);
+    else window.localStorage.removeItem('bluejob_access_token');
+  }
+}
 async function request(path, options = {}) {
   const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: ['Bearer', token].join(' ') } : {}), ...options.headers };
   const response = await fetch(`${API}${path}`, { ...options, headers });
@@ -17,4 +23,19 @@ export const api = {
   evidence: () => request('/passport/evidence'),
   uploadEvidence: (body) => request('/passport/evidence', { method: 'POST', body }),
   adminSummary: () => request('/admin/summary'),
+  health: () => request('/health'),
+  readiness: () => request('/ready'),
+  settings: () => request('/auth/settings'),
+  enableMfa: (body) => request('/auth/mfa/setup', { method: 'POST', body: JSON.stringify(body) }),
+  verifyMfa: (body) => request('/auth/mfa/verify', { method: 'POST', body: JSON.stringify(body) }),
+  sendEmailVerification: () => request('/verification/email/send', { method: 'POST' }),
+  confirmEmail: (code) => request('/verification/email/confirm', { method: 'POST', body: JSON.stringify({ code }) }),
+  sendPhoneVerification: (body) => request('/verification/phone/send', { method: 'POST', body: JSON.stringify(body) }),
+  confirmPhone: (code) => request('/verification/phone/confirm', { method: 'POST', body: JSON.stringify({ code }) }),
+  membershipCheckout: () => request('/billing/membership/checkout', { method: 'POST' }),
+  jobs: () => request('/jobs'),
+  createJob: (body) => request('/jobs', { method: 'POST', body: JSON.stringify(body) }),
+  updateJobStatus: (id, status) => request(`/jobs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  bids: (id) => request(`/jobs/${id}/bids`),
+  submitBid: (id, body) => request(`/jobs/${id}/bids`, { method: 'POST', body: JSON.stringify(body) }),
 };

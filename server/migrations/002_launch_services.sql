@@ -1,0 +1,16 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS score numeric(5,2) NOT NULL DEFAULT 0;
+ALTER TABLE evidence ADD COLUMN IF NOT EXISTS sha256 text;
+ALTER TABLE evidence ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+ALTER TABLE evidence ADD COLUMN IF NOT EXISTS verified_by uuid REFERENCES users(id);
+CREATE TABLE IF NOT EXISTS verification_codes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, type text NOT NULL CHECK(type IN ('email','phone')), target text NOT NULL, code_hash text NOT NULL, expires_at timestamptz NOT NULL, consumed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS verification_codes_lookup ON verification_codes(user_id,type,expires_at);
+CREATE TABLE IF NOT EXISTS jobs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL REFERENCES users(id), title text NOT NULL, description text NOT NULL, location text, budget numeric(12,2), starts_at timestamptz, status text NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','AWARDED','IN_PROGRESS','COMPLETED','CANCELLED')), created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status,created_at DESC);
+CREATE TABLE IF NOT EXISTS bids (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), job_id uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, bidder_id uuid NOT NULL REFERENCES users(id), amount numeric(12,2) NOT NULL, message text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','REJECTED','WITHDRAWN')), created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(job_id,bidder_id));
+CREATE TABLE IF NOT EXISTS ratings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), job_id uuid REFERENCES jobs(id) ON DELETE CASCADE, rater_id uuid NOT NULL REFERENCES users(id), rated_user_id uuid NOT NULL REFERENCES users(id), score numeric(3,2) NOT NULL CHECK(score>=0 AND score<=5), created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(job_id,rater_id,rated_user_id));
+CREATE TABLE IF NOT EXISTS memberships (user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, stripe_customer_id text, stripe_subscription_id text UNIQUE, status text NOT NULL DEFAULT 'INACTIVE', updated_at timestamptz NOT NULL DEFAULT now());

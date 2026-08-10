@@ -12,6 +12,7 @@ const workerNav = [
   ['Jobs', '/app/worker#jobs', BriefcaseBusiness],
   ['Payments', '/app/worker#payments', CreditCard],
   ['Settings', '/app/worker#settings', Settings],
+  ['Security', '/app/security', ShieldCheck],
 ];
 
 const contractorNav = [
@@ -24,6 +25,7 @@ const contractorNav = [
   ['Company Profile', '/app/contractor#company', UserRound],
   ['Work Score', '/app/contractor#score', Gauge],
   ['Settings', '/app/contractor#settings', Settings],
+  ['Security', '/app/security', ShieldCheck],
 ];
 
 const adminNav = [
