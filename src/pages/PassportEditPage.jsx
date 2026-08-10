@@ -10,7 +10,7 @@ export default function PassportEditPage() {
   const update = (event) => setPassport({ ...passport, [event.target.name]: event.target.value });
   const addHistory = () => {
     if (!history.title || !history.company) return;
-    setPassport({ ...passport, history: [...passport.history, history] });
+    setPassport({ ...passport, history: [...(Array.isArray(passport.history) ? passport.history : []), history] });
     setHistory({ title: '', company: '', dates: '', description: '' });
   };
   const submit = (event) => { event.preventDefault(); savePassport(passport); navigate('/app/passport'); };
