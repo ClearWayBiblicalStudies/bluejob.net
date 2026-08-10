@@ -34,6 +34,35 @@ enum EvidenceSource {
   COUNTERPARTY
 }
 
+enum JobStatus {
+  DRAFT
+  OPEN
+  MATCHING
+  AWARDED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BidStatus {
+  SUBMITTED
+  VIEWED
+  SHORTLISTED
+  DECLINED
+  WITHDRAWN
+  AWARDED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs      Job[]
+}
+
 model Worker {
   id              String        @id @default(cuid())
   email           String        @unique
@@ -46,6 +75,7 @@ model Worker {
 
   evidence        WorkEvidence[]
   scoreSnapshots  WorkScoreSnapshot[]
+  bids            Bid[]
 }
 
 model WorkEvidence {
@@ -89,4 +119,50 @@ model WorkScoreSnapshot {
   calculatedAt     DateTime @default(now())
 
   @@index([workerId, calculatedAt])
+}
+
+model Job {
+  id                  String       @id @default(cuid())
+  title               String
+  description         String
+  trade               String
+  city                String
+  state               String
+  latitude            Float?
+  longitude           Float?
+  budgetMinCents      Int?
+  budgetMaxCents      Int?
+  startDate           DateTime?
+  durationDays        Int?
+  workersNeeded       Int?
+  minimumWorkScore    Int?
+  status              JobStatus    @default(DRAFT)
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  bids                Bid[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([status])
+  @@index([trade])
+  @@index([city, state])
+}
+
+model Bid {
+  id                String     @id @default(cuid())
+  jobId             String
+  job               Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  bidderId           String
+  bidder             Worker     @relation(fields: [bidderId], references: [id])
+  amountCents        Int
+  proposedStartDate DateTime?
+  estimatedDays      Int?
+  message           String?
+  status            BidStatus  @default(SUBMITTED)
+  submittedAt       DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([jobId, bidderId])
+  @@index([jobId, status])
+  @@index([bidderId])
 }

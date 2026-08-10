@@ -2,11 +2,13 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { calculateWorkScore } from "./scoring.js";
+import jobBidRoutes from "./routes/job-bids.js";
 
 const app = express();
 const prisma = new PrismaClient();
 
 app.use(express.json());
+app.use("/api", jobBidRoutes);
 
 const WorkerSchema = z.object({
   email: z.string().email(),
