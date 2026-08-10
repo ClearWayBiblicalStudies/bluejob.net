@@ -20,8 +20,8 @@ export default function App() {
           <a href="#workscore">Work Score</a>
         </nav>
         <div className="navActions">
-          <button className="loginButton">Log in</button>
-          <button className="primaryButton">Join BlueJob</button>
+          <button type="button" className="loginButton">Log in</button>
+          <button type="button" className="primaryButton">Join BlueJob</button>
         </div>
       </header>
 
@@ -41,11 +41,11 @@ export default function App() {
               through verified work history, reputation and opportunity.
             </p>
             <div className="heroButtons">
-              <button className="primaryButton large">
+              <button type="button" className="primaryButton large">
                 Build your profile
                 <ArrowRight size={18} />
               </button>
-              <button className="secondaryButton large">Find workers</button>
+              <button type="button" className="secondaryButton large">Find workers</button>
             </div>
             <div className="trustLine">
               <ShieldCheck size={19} />
