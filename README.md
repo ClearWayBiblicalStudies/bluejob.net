@@ -16,6 +16,9 @@ npm run dev
 - `/signin` — sign in
 - `/choose-path` — subcontractor vs contractor path
 - `/app/worker` — Work Score / Work Passport worker dashboard
+- `/app/passport` — public Work Passport
+- `/app/passport/edit` — structured Passport editor
+- `/app/verification` — private evidence submission and review states
 - `/app/contractor` — contractor operations dashboard
 - `/app/post-job` — 5-step job posting flow
 - `/app/jobs/1/bids` — bid comparison + bidding insights
@@ -23,4 +26,4 @@ npm run dev
 
 ## Important
 
-This package is the UI/application shell. Replace frontend-only auth and example values with production API/database services before public launch. Passwords, payment data, verification documents, Work Score decisions, and admin authorization must be server-side.
+This package is the UI/application shell. Work Passport and verification drafts currently persist in browser storage for this build; replace them, frontend-only auth, and example values with production API/database/private document storage before public launch. Passwords, payment data, verification documents, Work Score decisions, and admin authorization must be server-side.
