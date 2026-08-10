@@ -18,9 +18,10 @@ export const emptyPassport = {
 
 export function readPassport() {
   try {
-    return { ...emptyPassport, ...JSON.parse(localStorage.getItem(PASSPORT_KEY) || '{}') };
+    const passport = { ...emptyPassport, ...JSON.parse(localStorage.getItem(PASSPORT_KEY) || '{}') };
+    return { ...passport, history: Array.isArray(passport.history) ? passport.history : [] };
   } catch {
-    return emptyPassport;
+    return { ...emptyPassport, history: [] };
   }
 }
 
