@@ -6,7 +6,7 @@ const workerNav = [
   ['Dashboard', '/app/worker', LayoutDashboard],
   ['Find Work', '/app/worker#find', Search],
   ['My Bids', '/app/worker#bids', ReceiptText],
-  ['Work Passport', '/app/worker#passport', FileCheck2],
+  ['Work Passport', '/app/passport', FileCheck2],
   ['Work Score', '/app/worker#score', Gauge],
   ['Messages', '/app/worker#messages', MessageSquare],
   ['Jobs', '/app/worker#jobs', BriefcaseBusiness],

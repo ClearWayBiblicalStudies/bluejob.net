@@ -8,6 +8,9 @@ import ContractorDashboard from './pages/ContractorDashboard';
 import PostJobPage from './pages/PostJobPage';
 import BidDetailPage from './pages/BidDetailPage';
 import AdminDashboard from './pages/AdminDashboard';
+import PassportPage from './pages/PassportPage';
+import PassportEditPage from './pages/PassportEditPage';
+import VerificationPage from './pages/VerificationPage';
 
 function AdminRoute() {
   const isSuperAdmin = sessionStorage.getItem('bluejob-role') === 'SUPER_ADMIN';
@@ -22,6 +25,9 @@ export default function App() {
       <Route path="/signin" element={<SignInPage />} />
       <Route path="/choose-path" element={<ChoosePathPage />} />
       <Route path="/app/worker" element={<WorkerDashboard />} />
+      <Route path="/app/passport" element={<PassportPage />} />
+      <Route path="/app/passport/edit" element={<PassportEditPage />} />
+      <Route path="/app/verification" element={<VerificationPage />} />
       <Route path="/app/contractor" element={<ContractorDashboard />} />
       <Route path="/app/post-job" element={<PostJobPage />} />
       <Route path="/app/jobs/:jobId/bids" element={<BidDetailPage />} />
