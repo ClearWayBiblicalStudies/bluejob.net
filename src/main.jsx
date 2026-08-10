@@ -17,7 +17,7 @@ const demoEvidence = [
 ]
 
 function Logo({ compact = false }) {
-  return <div className="logo"><span className="logo-mark"><HardHat size={compact ? 18 : 22} strokeWidth={2.6} /></span><span>blue<span className="blue">job</span></span></div>
+  return <div className="logo"><img src="/bluejob-logo.png" alt="BlueJob" /><span>blue<span className="blue">job</span></span></div>
 }
 
 function Button({ children, variant = 'primary', onClick, icon = true, type = 'button' }) {
