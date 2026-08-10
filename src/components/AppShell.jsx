@@ -1,4 +1,4 @@
-import { Bell, BriefcaseBusiness, Building2, FileCheck2, Gauge, LayoutDashboard, MessageSquare, ReceiptText, Search, Settings, ShieldCheck, Users } from 'lucide-react';
+import { Bell, BriefcaseBusiness, Building2, CreditCard, FileCheck2, Gauge, LayoutDashboard, MessageSquare, ReceiptText, Search, Settings, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import Logo from './Logo';
 
@@ -10,7 +10,7 @@ const workerNav = [
   ['Work Score', '/app/worker#score', Gauge],
   ['Messages', '/app/worker#messages', MessageSquare],
   ['Jobs', '/app/worker#jobs', BriefcaseBusiness],
-  ['Payments', '/app/worker#payments', ShieldCheck],
+  ['Payments', '/app/worker#payments', CreditCard],
   ['Settings', '/app/worker#settings', Settings],
 ];
 
@@ -21,7 +21,7 @@ const contractorNav = [
   ['Bids Received', '/app/contractor#bids', ReceiptText],
   ['Subcontractors', '/app/contractor#subs', Users],
   ['Messages', '/app/contractor#messages', MessageSquare],
-  ['Company Profile', '/app/contractor#company', Building2],
+  ['Company Profile', '/app/contractor#company', UserRound],
   ['Work Score', '/app/contractor#score', Gauge],
   ['Settings', '/app/contractor#settings', Settings],
 ];

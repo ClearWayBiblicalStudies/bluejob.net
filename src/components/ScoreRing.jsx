@@ -1,4 +1,4 @@
-export default function ScoreRing({ score = 846, label = 'Excellent' }) {
+export default function ScoreRing({ score = 846, label = 'Excellent', change = 12 }) {
   const pct = Math.max(0, Math.min(100, ((score - 300) / 600) * 100));
   return (
     <div className="score-ring-wrap">
@@ -12,7 +12,7 @@ export default function ScoreRing({ score = 846, label = 'Excellent' }) {
         <span className="kicker">WORK SCORE</span>
         <div className="score-big">{score}</div>
         <div className="status-positive">● {label}</div>
-        <p>↑ 12 points this month</p>
+        <p>↑ {change} points this month</p>
       </div>
     </div>
   );

@@ -25,8 +25,8 @@ export default function LandingPage() {
           <h1>Where hard work<br/><span>truly pays off.</span></h1>
           <p>BlueJob gives proven subcontractors a stronger path to quality work and gives contractors a faster way to build the right subcontractor network.</p>
           <div className="hero-actions">
-            <Link to="/signup" className="button button-primary button-lg">I Need Work</Link>
-            <Link to="/signup" className="button button-outline button-lg">I Need Work Done</Link>
+            <Link to="/choose-path?role=worker" className="button button-primary button-lg">I Need Work</Link>
+            <Link to="/choose-path?role=contractor" className="button button-outline button-lg">I Need Work Done</Link>
           </div>
           <div className="hero-metrics">
             <div><strong>Work Score</strong><span>Performance-backed reputation</span></div>
