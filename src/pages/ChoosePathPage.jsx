@@ -1,15 +1,22 @@
 import { ArrowRight, Building2, HardHat } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logo from '../components/Logo';
 
 export default function ChoosePathPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preferredRole = searchParams.get('role');
+  const heading = preferredRole === 'contractor'
+    ? 'Build Your Contractor Profile'
+    : preferredRole === 'worker'
+      ? 'Build Your Work Profile'
+      : 'Choose Your Path';
   return (
     <div className="choose-page">
       <header><Logo /></header>
       <section className="choose-content">
         <span className="kicker">ACCOUNT SETUP</span>
-        <h1>Choose Your Path</h1>
+        <h1>{heading}</h1>
         <p>How will you use BlueJob? You can add additional roles later.</p>
         <div className="choice-grid">
           <button onClick={() => navigate('/app/worker')} className="choice-card choice-card-blue">
