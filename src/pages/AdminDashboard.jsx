@@ -1,6 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Building2, CheckCircle2, FileWarning, ShieldCheck, Users } from 'lucide-react';
 import AppShell from '../components/AppShell';
+import { api } from '../lib/api';
+import { useEffect, useState } from 'react';
 
 const workspaces = [
   ['Personal Work Passport', '/app/worker'],
@@ -11,6 +13,8 @@ const workspaces = [
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [summary, setSummary] = useState({ users: 0, organizations: [], openVerification: 0 });
+  useEffect(() => { api.adminSummary().then(setSummary).catch(() => {}); }, []);
   return (
     <AppShell role="admin" user={{ initials: 'AA', name: 'Austin Alfonsi' }}>
       <div className="workspace-bar">
@@ -24,9 +28,9 @@ export default function AdminDashboard() {
         <span className="admin-pill"><ShieldCheck size={14}/> SUPER_ADMIN</span>
       </div>
       <section className="stat-row">
-        <div className="card stat-card"><span>Total Users</span><strong>0</strong><small>Awaiting first platform members</small></div>
-        <div className="card stat-card"><span>Organizations</span><strong>2</strong><small>Chrome Construction · Gulfside Improvements</small></div>
-        <div className="card stat-card"><span>Open Verification</span><strong>0</strong><small>No evidence awaiting review</small></div>
+        <div className="card stat-card"><span>Total Users</span><strong>{summary.users}</strong><small>Live platform members</small></div>
+        <div className="card stat-card"><span>Organizations</span><strong>{summary.organizations.length}</strong><small>{summary.organizations.map((organization) => organization.name).join(' · ')}</small></div>
+        <div className="card stat-card"><span>Open Verification</span><strong>{summary.openVerification}</strong><small>Evidence awaiting review</small></div>
         <div className="card stat-card"><span>Open Disputes</span><strong>0</strong><small>No active disputes</small></div>
       </section>
       <div className="admin-grid">

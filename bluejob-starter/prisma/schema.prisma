@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum EvidenceType {
+  BLUEJOB_JOB
+  PAYMENT
+  INVOICE
+  EMPLOYMENT
+  LICENSE
+  CERTIFICATION
+  INSURANCE
+  CONTRACTOR_ATTESTATION
+}
+
+enum EvidenceSource {
+  BLUEJOB
+  PAYMENT_PROVIDER
+  PAYROLL_PROVIDER
+  GOVERNMENT_REGISTRY
+  INSURANCE_PROVIDER
+  USER_UPLOAD
+  COUNTERPARTY
+}
+
+model Worker {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  phone           String?
+  legalName       String
+  primaryTrade    String?
+  identityStatus  VerificationStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  evidence        WorkEvidence[]
+  scoreSnapshots  WorkScoreSnapshot[]
+}
+
+model WorkEvidence {
+  id              String        @id @default(cuid())
+  workerId        String
+  worker          Worker        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  type            EvidenceType
+  source          EvidenceSource
+  status          VerificationStatus @default(PENDING)
+
+  externalRef     String?
+  trade           String?
+  monetaryValueCents Int?
+  occurredAt      DateTime?
+  confidence      Float         @default(0)
+  metadata        Json?
+
+  createdAt       DateTime      @default(now())
+  verifiedAt      DateTime?
+
+  @@index([workerId, status])
+  @@index([externalRef])
+}
+
+model WorkScoreSnapshot {
+  id               String   @id @default(cuid())
+  workerId         String
+  worker           Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  score            Int?
+  status           String
+  reliability      Int?
+  completion       Int?
+  experience       Int?
+  repeatTrust      Int?
+  compliance       Int?
+  evidenceStrength Int?
+
+  explanation      Json
+  calculatedAt     DateTime @default(now())
+
+  @@index([workerId, calculatedAt])
+}

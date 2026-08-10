@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
-import { readPassport, savePassport } from '../lib/passport';
+import { emptyPassport } from '../lib/passport';
+import { api } from '../lib/api';
 
 export default function PassportEditPage() {
   const navigate = useNavigate();
-  const [passport, setPassport] = useState(readPassport);
+  const [passport, setPassport] = useState(emptyPassport);
+  useEffect(() => { api.passport().then(({ passport: saved }) => saved && setPassport({ ...emptyPassport, ...saved, travelRadius: saved.travel_radius, workerType: saved.worker_type, crewSize: saved.crew_size, yearsExperience: saved.years_experience })).catch(() => navigate('/signin')); }, [navigate]);
   const [history, setHistory] = useState({ title: '', company: '', dates: '', description: '' });
   const update = (event) => setPassport({ ...passport, [event.target.name]: event.target.value });
   const addHistory = () => {
@@ -13,7 +15,7 @@ export default function PassportEditPage() {
     setPassport({ ...passport, history: [...(Array.isArray(passport.history) ? passport.history : []), { ...history, id: crypto.randomUUID() }] });
     setHistory({ title: '', company: '', dates: '', description: '' });
   };
-  const submit = (event) => { event.preventDefault(); savePassport(passport); navigate('/app/passport'); };
+  const submit = async (event) => { event.preventDefault(); await api.savePassport(passport); navigate('/app/passport'); };
 
   return <AppShell role="worker"><div className="page-heading"><div><span className="kicker">WORK PASSPORT</span><h1>Edit your professional record</h1><p>Complete the details companies use to find the right professional.</p></div><Link to="/app/passport" className="back-link">← Back to Passport</Link></div>
     <form className="card passport-form" onSubmit={submit}><section><h2>Professional identity</h2><div className="two-col"><label>Full name<input name="name" value={passport.name} onChange={update} required /></label><label>Primary trade<input name="trade" value={passport.trade} onChange={update} placeholder="e.g. Commercial Electrician" required /></label><label>Location<input name="location" value={passport.location} onChange={update} placeholder="City, State" /></label><label>Travel radius (miles)<input name="travelRadius" value={passport.travelRadius} onChange={update} type="number" min="0" /></label><label>Worker type<select name="workerType" value={passport.workerType} onChange={update}><option>Individual</option><option>Crew</option><option>Subcontracting company</option></select></label><label>Crew size<input name="crewSize" value={passport.crewSize} onChange={update} type="number" min="1" /></label><label>Years of experience<input name="yearsExperience" value={passport.yearsExperience} onChange={update} type="number" min="0" /></label><label>Availability<select name="availability" value={passport.availability} onChange={update}><option>Available now</option><option>Available within 2 weeks</option><option>Booked</option></select></label></div></section>

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import React from 'react';
 import LandingPage from './pages/LandingPage';
 import SignUpPage from './pages/SignUpPage';
 import SignInPage from './pages/SignInPage';
@@ -11,11 +12,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import PassportPage from './pages/PassportPage';
 import PassportEditPage from './pages/PassportEditPage';
 import VerificationPage from './pages/VerificationPage';
+import { api } from './lib/api';
 
 function AdminRoute() {
-  // This demo guard is replaced by server-side authorization before launch.
-  const isSuperAdmin = sessionStorage.getItem('bluejob-role') === 'SUPER_ADMIN';
-  return isSuperAdmin ? <AdminDashboard /> : <Navigate to="/signin" replace />;
+  const [allowed, setAllowed] = React.useState(null);
+  React.useEffect(() => { api.me().then(({ user }) => setAllowed(user.role === 'SUPER_ADMIN')).catch(() => setAllowed(false)); }, []);
+  return allowed ? <AdminDashboard /> : allowed === false ? <Navigate to="/signin" replace /> : null;
 }
 
 export default function App() {

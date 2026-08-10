@@ -2,11 +2,13 @@ import { BadgeCheck, Edit3, FileCheck2, MapPin, ShieldCheck } from 'lucide-react
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ScoreRing from '../components/ScoreRing';
-import { readEvidence, readPassport } from '../lib/passport';
+import { emptyPassport } from '../lib/passport';
+import { api } from '../lib/api';
+import { useEffect, useState } from 'react';
 
 export default function PassportPage() {
-  const passport = readPassport();
-  const evidence = readEvidence();
+  const [passport, setPassport] = useState(emptyPassport); const [evidence, setEvidence] = useState([]);
+  useEffect(() => { Promise.all([api.passport(), api.evidence()]).then(([p, e]) => { if (p.passport) setPassport({ ...emptyPassport, ...p.passport, travelRadius: p.passport.travel_radius, workerType: p.passport.worker_type, crewSize: p.passport.crew_size, yearsExperience: p.passport.years_experience }); setEvidence(e.evidence); }).catch(() => {}); }, []);
   const verified = evidence.filter((item) => item.status === 'Verified').length;
   const displayName = passport.name || 'Your professional identity';
   const skills = passport.skills ? passport.skills.split(',').map((skill) => skill.trim()).filter(Boolean) : [];
