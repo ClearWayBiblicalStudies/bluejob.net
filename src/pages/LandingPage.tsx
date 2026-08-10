@@ -1,0 +1,2 @@
+import { Action, Page } from "./PagePrimitives";
+export function LandingPage() { return <Page><p className="eyebrow">VERIFIED WORK NETWORK</p><h1>Your work should be worth something. <span className="blue">Prove it.</span></h1><p className="lead">A trusted Work Passport and Work Score for the people who build what matters.</p><div className="form"><Action to="/signup">Get started</Action><Action to="/signin">Sign in</Action></div></Page>; }
