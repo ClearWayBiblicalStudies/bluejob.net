@@ -5,7 +5,7 @@ import auth from './routes/auth.js';
 import passport from './routes/passport.js';
 import admin from './routes/admin.js';
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || true })); app.use(express.json());
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' })); app.use(express.json());
 app.get('/api/health', (_,res) => res.json({ ok:true }));
 app.use('/api/auth', auth); app.use('/api/passport', passport); app.use('/api/admin', admin);
 app.use((err, _req, res, _next) => res.status(500).json({ error: 'Unexpected server error' }));

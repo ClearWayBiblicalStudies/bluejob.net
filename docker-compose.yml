@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: bluejob
       POSTGRES_USER: bluejob
-      POSTGRES_PASSWORD: bluejob
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your environment}
     ports: ["5432:5432"]
     volumes: ["bluejob-db:/var/lib/postgresql/data", "./server/migrations:/docker-entrypoint-initdb.d:ro"]
 volumes:
