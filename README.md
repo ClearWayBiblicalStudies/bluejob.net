@@ -19,6 +19,7 @@ npm run dev
 - `/app/contractor` — contractor operations dashboard
 - `/app/post-job` — 5-step job posting flow
 - `/app/jobs/1/bids` — bid comparison + bidding insights
+- `/app/admin` — private Super Admin Command Center (requires `SUPER_ADMIN` session role)
 
 ## Important
 

@@ -9,6 +9,11 @@ import PostJobPage from './pages/PostJobPage';
 import BidDetailPage from './pages/BidDetailPage';
 import AdminDashboard from './pages/AdminDashboard';
 
+function AdminRoute() {
+  const isSuperAdmin = sessionStorage.getItem('bluejob-role') === 'SUPER_ADMIN';
+  return isSuperAdmin ? <AdminDashboard /> : <Navigate to="/signin" replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -20,7 +25,7 @@ export default function App() {
       <Route path="/app/contractor" element={<ContractorDashboard />} />
       <Route path="/app/post-job" element={<PostJobPage />} />
       <Route path="/app/jobs/:jobId/bids" element={<BidDetailPage />} />
-      <Route path="/app/admin" element={<AdminDashboard />} />
+      <Route path="/app/admin" element={<AdminRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
