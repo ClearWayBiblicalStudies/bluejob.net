@@ -1,4 +1,4 @@
-import { Bell, BriefcaseBusiness, Building2, CreditCard, FileCheck2, Gauge, LayoutDashboard, MessageSquare, ReceiptText, Search, Settings, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { Bell, BriefcaseBusiness, Building2, CreditCard, FileCheck2, Gauge, LayoutDashboard, MessageSquare, ReceiptText, Search, Settings, ShieldCheck, UserRound, Users, ClipboardCheck, Scale, BarChart3 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import Logo from './Logo';
 
@@ -26,8 +26,21 @@ const contractorNav = [
   ['Settings', '/app/contractor#settings', Settings],
 ];
 
+const adminNav = [
+  ['Operations Command Center', '/app/admin', LayoutDashboard],
+  ['Users', '/app/admin#users', Users],
+  ['Organizations', '/app/admin#organizations', Building2],
+  ['Jobs', '/app/admin#jobs', BriefcaseBusiness],
+  ['Work Scores', '/app/admin#scores', Gauge],
+  ['Verification Queue', '/app/admin#verification', ClipboardCheck],
+  ['Disputes', '/app/admin#disputes', Scale],
+  ['Billing & Memberships', '/app/admin#billing', CreditCard],
+  ['Growth & Analytics', '/app/admin#growth', BarChart3],
+  ['System Settings', '/app/admin#settings', Settings],
+];
+
 export default function AppShell({ role = 'worker', children, user = { initials: 'AA', name: 'Austin A.' } }) {
-  const items = role === 'contractor' ? contractorNav : workerNav;
+  const items = role === 'admin' ? adminNav : role === 'contractor' ? contractorNav : workerNav;
   return (
     <div className="app-layout">
       <aside className="sidebar">
@@ -51,7 +64,7 @@ export default function AppShell({ role = 'worker', children, user = { initials:
               <div className="avatar">{user.initials}</div>
               <div>
                 <strong>{user.name}</strong>
-                <span>{role === 'contractor' ? 'Chrome Construction' : 'Subcontractor'}</span>
+                <span>{role === 'admin' ? 'SUPER_ADMIN · BlueJob Administration' : role === 'contractor' ? 'Chrome Construction' : 'Subcontractor'}</span>
               </div>
             </div>
           </div>

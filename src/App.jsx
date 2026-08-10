@@ -7,6 +7,7 @@ import WorkerDashboard from './pages/WorkerDashboard';
 import ContractorDashboard from './pages/ContractorDashboard';
 import PostJobPage from './pages/PostJobPage';
 import BidDetailPage from './pages/BidDetailPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/app/contractor" element={<ContractorDashboard />} />
       <Route path="/app/post-job" element={<PostJobPage />} />
       <Route path="/app/jobs/:jobId/bids" element={<BidDetailPage />} />
+      <Route path="/app/admin" element={<AdminDashboard />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
