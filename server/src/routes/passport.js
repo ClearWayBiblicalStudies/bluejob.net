@@ -9,7 +9,9 @@ const allowedMimeTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 
 const upload = multer({
   dest: uploadDirectory,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, callback) => callback(null, allowedMimeTypes.has(file.mimetype)),
+  fileFilter: (_req, file, callback) => allowedMimeTypes.has(file.mimetype)
+    ? callback(null, true)
+    : callback(new Error('Only PDF, JPEG, PNG, or WebP files are allowed')),
 });
 const router = Router(); router.use(requireAuth);
 router.get('/', async (req, res) => { const { rows } = await pool.query('SELECT * FROM passports WHERE user_id=$1', [req.user.sub]); res.json({ passport: rows[0] || null }); });

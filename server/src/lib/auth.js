@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 
+if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET must be set before starting the server');
+
 export function signUser(user) {
   return jwt.sign({ sub: user.id, role: user.role, organizationId: user.organization_id || null }, process.env.JWT_SECRET, { expiresIn: '8h' });
 }
