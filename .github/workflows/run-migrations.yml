@@ -29,12 +29,17 @@ jobs:
       - name: Check DATABASE_URL format safely
         run: |
           node -e '
-          const u = new URL(process.env.DATABASE_URL);
-          console.log("host:", u.hostname);
-          console.log("port:", u.port);
-          console.log("database:", u.pathname);
-          console.log("sslmode:", u.searchParams.get("sslmode"));
-          console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
+          try {
+            const u = new URL(process.env.DATABASE_URL);
+            console.log("host:", u.hostname);
+            console.log("port:", u.port);
+            console.log("database:", u.pathname);
+            console.log("sslmode:", u.searchParams.get("sslmode"));
+            console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
+          } catch {
+            console.error("DATABASE_URL is missing or invalid");
+            process.exitCode = 1;
+          }
           '
 
       - name: Run database migrations
