@@ -28,23 +28,28 @@ jobs:
 
       - name: Check DATABASE_URL format safely
         run: |
-          node -e '
-          const value = process.env.DATABASE_URL || "";
-          const normalized = value.trim();
-          console.log("DATABASE_URL present:", normalized.length > 0);
-          console.log("Starts with postgresql://:", normalized.startsWith("postgresql://"));
-          if (!normalized) process.exit(1);
-          try {
-            const u = new URL(normalized);
-            console.log("URL parse: OK");
-            console.log("host present:", Boolean(u.hostname));
-            console.log("sslmode:", u.searchParams.get("sslmode"));
-            console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
-          } catch {
-            console.error("URL parse: INVALID");
+          node - <<'NODE'
+          const raw = process.env.DATABASE_URL;
+          const value = typeof raw === "string" ? raw.trim() : "";
+
+          console.log("DATABASE_URL present:", value.length > 0);
+          if (!value) {
+            console.error("DATABASE_URL is missing or empty");
             process.exit(1);
           }
-          '
+
+          try {
+            const url = new URL(value);
+            console.log("URL parse: OK");
+            console.log("protocol:", url.protocol);
+            console.log("host present:", Boolean(url.hostname));
+            console.log("sslmode:", url.searchParams.get("sslmode"));
+            console.log("has sslrootcert:", url.searchParams.has("sslrootcert"));
+          } catch {
+            console.error("DATABASE_URL is malformed");
+            process.exit(1);
+          }
+          NODE
 
       - name: Run database migrations
         run: npm run migrate
