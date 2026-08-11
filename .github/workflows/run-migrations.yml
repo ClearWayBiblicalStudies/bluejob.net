@@ -33,7 +33,7 @@ jobs:
           const normalized = value.trim();
           console.log("DATABASE_URL present:", value.length > 0);
           console.log("Starts with postgresql://:", normalized.startsWith("postgresql://"));
-          if (!value) process.exit(1);
+          if (!normalized) process.exit(1);
           try {
             const u = new URL(normalized);
             console.log("URL parse: OK");
