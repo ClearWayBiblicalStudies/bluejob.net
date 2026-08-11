@@ -1,9 +1,15 @@
 import { Client } from "pg";
 import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is required to run migrations");
+const rawUrl = process.env.DATABASE_URL;
+if (!rawUrl) throw new Error("DATABASE_URL is required to run migrations");
+
+// Strip parameters unsupported by the pg library (e.g. sslrootcert=system,
+// which is a psql-only shorthand for the OS trust store).
+const parsedUrl = new URL(rawUrl);
+parsedUrl.searchParams.delete("sslrootcert");
+const connectionString = parsedUrl.toString();
 
 const client = new Client({ connectionString, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined });
 await client.connect();
