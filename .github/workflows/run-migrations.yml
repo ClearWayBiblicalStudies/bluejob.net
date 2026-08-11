@@ -30,40 +30,61 @@ jobs:
 
       - name: Prepare DATABASE_URL
         shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL secret is missing"
-            exit 1
-          fi
+          node <<'NODE'
+          const fs = require("fs");
 
-          CLEAN_URL="$(printf '%s' "$DATABASE_URL" | tr -d '\r\n')"
+          let raw = (process.env.DATABASE_URL || "").trim();
 
-          CLEAN_URL="${CLEAN_URL#DATABASE_URL=}"
-          CLEAN_URL="${CLEAN_URL#psql }"
-          CLEAN_URL="${CLEAN_URL#\"}"
-          CLEAN_URL="${CLEAN_URL%\"}"
-          CLEAN_URL="${CLEAN_URL#\'}"
-          CLEAN_URL="${CLEAN_URL%\'}"
+          if (!raw) {
+            console.error("DATABASE_URL secret is missing");
+            process.exit(1);
+          }
 
-          CLEAN_URL="${CLEAN_URL//&amp;/&}"
-          CLEAN_URL="${CLEAN_URL//&sslrootcert=system/}"
-          CLEAN_URL="${CLEAN_URL//sslrootcert=system&/}"
-          CLEAN_URL="${CLEAN_URL//?sslrootcert=system/?}"
+          // Fix copied HTML encoding
+          raw = raw.replace(/&amp;/g, "&");
 
-          if [[ "$CLEAN_URL" != postgres://* && "$CLEAN_URL" != postgresql://* ]]; then
-            echo "DATABASE_URL does not contain a valid PostgreSQL URI"
-            exit 1
-          fi
+          // Pull PostgreSQL URI out even if GitHub secret has
+          // DATABASE_URL=, quotes, psql, or other wrapper text.
+          const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'<>]+/i);
 
-          echo "::add-mask::$CLEAN_URL"
+          if (!match) {
+            console.error("Could not locate PostgreSQL URI in DATABASE_URL");
+            process.exit(1);
+          }
 
-          {
-            echo "DATABASE_URL<<BLUEJOB_DB_URL"
-            echo "$CLEAN_URL"
-            echo "BLUEJOB_DB_URL"
-          } >> "$GITHUB_ENV"
+          let url;
 
-          echo "DATABASE_URL prepared successfully"
+          try {
+            url = new URL(match[0]);
+          } catch {
+            console.error("PostgreSQL URI could not be parsed");
+            process.exit(1);
+          }
+
+          if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") {
+            console.error("DATABASE_URL is not PostgreSQL");
+            process.exit(1);
+          }
+
+          // PlanetScale gives sslrootcert=system.
+          // Node pg was treating "system" as a file path, so remove ONLY this parameter.
+          url.searchParams.delete("sslrootcert");
+
+          const clean = url.toString();
+
+          // Never print the credential
+          console.log(`::add-mask::${clean}`);
+
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `DATABASE_URL=${clean}\n`
+          );
+
+          console.log("DATABASE_URL prepared successfully");
+          NODE
 
       - name: Run database migrations
         run: npm run migrate
