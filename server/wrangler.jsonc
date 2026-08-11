@@ -3,5 +3,13 @@
   "name": "bluejob-api",
   "main": "src/worker.js",
   "compatibility_date": "2026-08-11",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "6ba208e725084eb882785d33396131bb"
+    }
+  ]
 }
