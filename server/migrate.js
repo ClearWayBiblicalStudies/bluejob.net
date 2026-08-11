@@ -11,16 +11,18 @@ try {
   await client.query("BEGIN");
   try {
     await client.query("CREATE SCHEMA IF NOT EXISTS bluejob");
-    await client.query("SET search_path TO bluejob, public");
+    await client.query("SET search_path TO bluejob");
     await client.query("CREATE TABLE IF NOT EXISTS bluejob.schema_migrations (filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   }
-  await client.query("SET search_path TO bluejob, public");
-  const context = await client.query("SELECT current_user, current_database(), current_schema()");
-  console.log("Migration database context:", context.rows[0]);
+  await client.query("SET search_path TO bluejob");
+  const currentUser = await client.query("SELECT current_user");
+  console.log("Migration current_user:", currentUser.rows[0].current_user);
+  const searchPath = await client.query("SHOW search_path");
+  console.log("Migration search_path:", searchPath.rows[0].search_path);
   const applied = new Set((await client.query("SELECT filename FROM bluejob.schema_migrations")).rows.map((row) => row.filename));
   const files = (await readdir(new URL("./migrations/", import.meta.url)))
     .filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
