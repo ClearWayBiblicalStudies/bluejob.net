@@ -39,9 +39,7 @@ jobs:
           v = v.replace(/^["']|["']$/g, "");
           v = v.replace(/[\r\n]/g, "");
           v = v.replace(/&amp;sslrootcert=system/g, "");
-          v = v.replace(/&sslrootcert=system/g, "");
           v = v.replace(/\?sslrootcert=system&amp;/g, "?");
-          v = v.replace(/\?sslrootcert=system&/g, "?");
           v = v.replace(/\?sslrootcert=system$/g, "");
 
           if (!v.startsWith("postgresql://") && !v.startsWith("postgres://")) {
@@ -49,15 +47,15 @@ jobs:
             process.exit(1);
           }
 
-          // Mask normalized value in GitHub logs
-          console.log(`::add-mask::${v}`);
-
           try {
             new URL(v);
           } catch {
             console.error("DATABASE_URL still cannot be parsed after normalization");
             process.exit(1);
           }
+
+          // Mask normalized value in GitHub logs
+          console.log(`::add-mask::${v}`);
 
           // Give the cleaned value to every following workflow step
           fs.appendFileSync(
