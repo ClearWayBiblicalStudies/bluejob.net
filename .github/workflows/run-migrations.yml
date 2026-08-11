@@ -26,33 +26,46 @@ jobs:
       - name: Install server dependencies
         run: npm ci
 
-      - name: Check DATABASE_URL format safely
+      - name: Normalize DATABASE_URL safely
         run: |
           node <<'NODE'
-          const v = process.env.DATABASE_URL ?? "";
+          const fs = require("fs");
 
-          console.log("DATABASE_URL present:", v.trim().length > 0);
-          if (!v.trim()) {
-            console.error("DATABASE_URL is missing or empty");
+          let v = process.env.DATABASE_URL || "";
+
+          // Clean common copy/paste problems
+          v = v.trim();
+          v = v.replace(/^DATABASE_URL=/, "");
+          v = v.replace(/^["']|["']$/g, "");
+          v = v.replace(/[\r\n]/g, "");
+          v = v.replace(/&amp;sslrootcert=system/g, "");
+          v = v.replace(/&sslrootcert=system/g, "");
+          v = v.replace(/\?sslrootcert=system&amp;/g, "?");
+          v = v.replace(/\?sslrootcert=system&/g, "?");
+          v = v.replace(/\?sslrootcert=system$/g, "");
+
+          if (!v.startsWith("postgresql://") && !v.startsWith("postgres://")) {
+            console.error("DATABASE_URL still does not look like a PostgreSQL URL");
             process.exit(1);
           }
 
-          console.log("starts postgresql://:", v.startsWith("postgresql://"));
-          console.log("starts postgres://:", v.startsWith("postgres://"));
-          console.log("starts DATABASE_URL=:", v.startsWith("DATABASE_URL="));
-          console.log("has spaces:", v.includes(" "));
-          console.log("has newline:", v.includes("\n") || v.includes("\r"));
-          console.log("has quotes:", v.includes('"') || v.includes("'"));
-          console.log("has sslrootcert:", v.includes("sslrootcert"));
-          console.log("at-sign count:", (v.match(/@/g) || []).length);
+          // Mask normalized value in GitHub logs
+          console.log(`::add-mask::${v}`);
 
           try {
-            new URL(v.trim());
-            console.log("URL parse: OK");
+            new URL(v);
           } catch {
-            console.error("DATABASE_URL is malformed (URL parse: INVALID)");
+            console.error("DATABASE_URL still cannot be parsed after normalization");
             process.exit(1);
           }
+
+          // Give the cleaned value to every following workflow step
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `DATABASE_URL=${v}\n`
+          );
+
+          console.log("DATABASE_URL normalized successfully");
           NODE
 
       - name: Run database migrations
