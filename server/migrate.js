@@ -8,8 +8,6 @@ if (!connectionString) throw new Error("DATABASE_URL is required to run migratio
 const client = new Client({ connectionString, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined });
 await client.connect();
 try {
-  const context = await client.query("SELECT current_user, current_database(), current_schema()");
-  console.log("Migration database context:", context.rows[0]);
   await client.query("BEGIN");
   try {
     await client.query("CREATE SCHEMA IF NOT EXISTS bluejob");
@@ -21,6 +19,8 @@ try {
     throw error;
   }
   await client.query("SET search_path TO bluejob, public");
+  const context = await client.query("SELECT current_user, current_database(), current_schema()");
+  console.log("Migration database context:", context.rows[0]);
   const applied = new Set((await client.query("SELECT filename FROM bluejob.schema_migrations")).rows.map((row) => row.filename));
   const files = (await readdir(new URL("./migrations/", import.meta.url)))
     .filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
