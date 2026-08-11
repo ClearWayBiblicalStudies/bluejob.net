@@ -28,7 +28,7 @@ jobs:
 
       - name: Check DATABASE_URL format safely
         run: |
-          node - <<'NODE'
+          node <<'NODE'
           const raw = process.env.DATABASE_URL;
           const value = typeof raw === "string" ? raw.trim() : "";
 
