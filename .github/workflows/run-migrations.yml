@@ -29,15 +29,19 @@ jobs:
       - name: Check DATABASE_URL format safely
         run: |
           node -e '
+          const value = process.env.DATABASE_URL || "";
+          const normalized = value.trim();
+          console.log("DATABASE_URL present:", normalized.length > 0);
+          console.log("Starts with postgresql://:", normalized.startsWith("postgresql://"));
+          if (!normalized) process.exit(1);
           try {
-            const u = new URL(process.env.DATABASE_URL);
-            console.log("host:", u.hostname);
-            console.log("port:", u.port);
-            console.log("database:", u.pathname);
+            const u = new URL(normalized);
+            console.log("URL parse: OK");
+            console.log("host present:", Boolean(u.hostname));
             console.log("sslmode:", u.searchParams.get("sslmode"));
             console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
           } catch {
-            console.error("DATABASE_URL is missing or invalid");
+            console.error("URL parse: INVALID");
             process.exit(1);
           }
           '
