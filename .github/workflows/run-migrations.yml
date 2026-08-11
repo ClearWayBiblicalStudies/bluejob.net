@@ -7,78 +7,63 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
     defaults:
       run:
         working-directory: server
-
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
 
       - name: Install server dependencies
         run: npm ci
 
-      - name: Normalize DATABASE_URL safely
+      - name: Prepare DATABASE_URL
+        shell: bash
         run: |
-          node <<'NODE'
-          const fs = require("fs");
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is missing"
+            exit 1
+          fi
 
-          let raw = process.env.DATABASE_URL || "";
-          raw = raw.trim();
+          CLEAN_URL="$(printf '%s' "$DATABASE_URL" | tr -d '\r\n')"
 
-          // Decode common copy/paste HTML artifacts
-          raw = raw.replace(/&amp;/g, "&");
+          CLEAN_URL="${CLEAN_URL#DATABASE_URL=}"
+          CLEAN_URL="${CLEAN_URL#psql }"
+          CLEAN_URL="${CLEAN_URL#\"}"
+          CLEAN_URL="${CLEAN_URL%\"}"
+          CLEAN_URL="${CLEAN_URL#\'}"
+          CLEAN_URL="${CLEAN_URL%\'}"
 
-          // Remove common wrappers
-          raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "");
-          raw = raw.replace(/^psql\s+/i, "");
-          raw = raw.replace(/^["']|["']$/g, "");
+          CLEAN_URL="${CLEAN_URL//&amp;/&}"
+          CLEAN_URL="${CLEAN_URL//&sslrootcert=system/}"
+          CLEAN_URL="${CLEAN_URL//sslrootcert=system&/}"
+          CLEAN_URL="${CLEAN_URL//?sslrootcert=system/?}"
 
-          // Extract PostgreSQL URI even if surrounded by other text
-          const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'\\>)\]]+/i);
+          if [[ "$CLEAN_URL" != postgres://* && "$CLEAN_URL" != postgresql://* ]]; then
+            echo "DATABASE_URL does not contain a valid PostgreSQL URI"
+            exit 1
+          fi
 
-          if (!match) {
-            console.error("No PostgreSQL URI found inside DATABASE_URL");
-            process.exit(1);
-          }
+          echo "::add-mask::$CLEAN_URL"
 
-          let v = match[0];
+          {
+            echo "DATABASE_URL<<BLUEJOB_DB_URL"
+            echo "$CLEAN_URL"
+            echo "BLUEJOB_DB_URL"
+          } >> "$GITHUB_ENV"
 
-          // Remove unsupported certificate option
-          v = v.replace(/&sslrootcert=system/gi, "");
-          v = v.replace(/\?sslrootcert=system&/gi, "?");
-          v = v.replace(/\?sslrootcert=system$/gi, "");
-
-          try {
-            const u = new URL(v);
-
-            if (!["postgresql:", "postgres:"].includes(u.protocol)) {
-              throw new Error("Wrong protocol");
-            }
-          } catch {
-            console.error("Extracted PostgreSQL URI is still invalid");
-            process.exit(1);
-          }
-
-          // Mask normalized value in GitHub logs
-          console.log(`::add-mask::${v}`);
-
-          // Give the cleaned value to every following workflow step
-          fs.appendFileSync(
-            process.env.GITHUB_ENV,
-            `DATABASE_URL=${v}\n`
-          );
-
-          console.log("DATABASE_URL normalized successfully");
-          NODE
+          echo "DATABASE_URL prepared successfully"
 
       - name: Run database migrations
         run: npm run migrate
