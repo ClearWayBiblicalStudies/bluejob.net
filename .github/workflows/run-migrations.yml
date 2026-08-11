@@ -29,7 +29,7 @@ jobs:
       - name: Check DATABASE_URL format safely
         run: |
           node <<'NODE'
-          const v = process.env.DATABASE_URL || "";
+          const v = process.env.DATABASE_URL ?? "";
 
           console.log("DATABASE_URL present:", v.trim().length > 0);
           if (!v.trim()) {
