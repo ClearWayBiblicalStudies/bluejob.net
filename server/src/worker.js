@@ -15,12 +15,14 @@ export default {
     }
 
     if (pathname === "/api/readyz") {
+      let connected = false;
       const client = new Client({
         connectionString: env.HYPERDRIVE?.connectionString,
       });
 
       try {
         await client.connect();
+        connected = true;
         await client.query("SELECT 1 AS ready");
         return jsonResponse({ ok: true, database: "ready" });
       } catch {
@@ -29,7 +31,9 @@ export default {
           503,
         );
       } finally {
-        await client.end().catch(() => {});
+        if (connected) {
+          await client.end().catch(() => {});
+        }
       }
     }
 
