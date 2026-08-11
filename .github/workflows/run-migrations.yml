@@ -43,7 +43,7 @@ jobs:
           raw = raw.replace(/^["']|["']$/g, "");
 
           // Extract PostgreSQL URI even if surrounded by other text
-          const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'\\]+/i);
+          const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'\\>)\]]+/i);
 
           if (!match) {
             console.error("No PostgreSQL URI found inside DATABASE_URL");
@@ -52,7 +52,7 @@ jobs:
 
           let v = match[0];
 
-          // Remove PlanetScale CLI-only certificate option
+          // Remove unsupported certificate option
           v = v.replace(/&sslrootcert=system/gi, "");
           v = v.replace(/\?sslrootcert=system&/gi, "?");
           v = v.replace(/\?sslrootcert=system$/gi, "");
