@@ -7,96 +7,65 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
 
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
     defaults:
       run:
         working-directory: server
 
     steps:
-      - name: Checkout repository
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: server/package-lock.json
 
       - name: Install server dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Prepare DATABASE_URL
+      - name: Build PlanetScale connection
         shell: bash
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PLANETSCALE_PASSWORD: ${{ secrets.DATABASE_URL }}
         run: |
           node <<'NODE'
           const fs = require("fs");
 
-          let raw = (process.env.DATABASE_URL || "").trim();
+          let secret = (process.env.PLANETSCALE_PASSWORD || "").trim();
 
-          if (!raw) {
-            console.error("DATABASE_URL secret is empty");
-            process.exit(1);
+          if (!secret) {
+            throw new Error("DATABASE_URL secret is empty");
           }
 
-          let finalUrl;
-
-          // CASE 1:
-          // Secret contains only the PlanetScale password.
-          // Build the full Default-role URL automatically.
-          if (raw.startsWith("pscale_pw_")) {
-            const password = encodeURIComponent(raw);
-
-            finalUrl =
-              "postgresql://postgres.la4e9pgvuhqw:" +
-              password +
-              "@aws-us-east-1-1.pg.psdb.cloud:5432/postgres?sslmode=require";
+          // If the secret is already a URI, extract its password.
+          if (secret.startsWith("postgresql://") || secret.startsWith("postgres://")) {
+            const supplied = new URL(secret);
+            secret = decodeURIComponent(supplied.password);
           }
 
-          // CASE 2:
-          // Secret already contains a full PostgreSQL URL.
-          else {
-            raw = raw.replace(/&amp;/g, "&");
-            raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "");
-            raw = raw.replace(/^psql\s+/i, "");
-            raw = raw.replace(/^['"]|['"]$/g, "");
+          // Mask it BEFORE doing anything else.
+          console.log(`::add-mask::${secret}`);
 
-            const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'<>]+/i);
-
-            if (!match) {
-              console.error("DATABASE_URL is neither a PlanetScale password nor PostgreSQL URL");
-              process.exit(1);
-            }
-
-            const u = new URL(match[0]);
-
-            // Avoid node-postgres treating "system" as a certificate filename.
-            u.searchParams.delete("sslrootcert");
-
-            // Keep SSL enabled.
-            u.searchParams.set("sslmode", "require");
-
-            finalUrl = u.toString();
-          }
-
-          process.stdout.write(`::add-mask::${finalUrl}\n`);
-
-          const githubEnv = process.env.GITHUB_ENV;
-          if (!githubEnv) {
-            console.error("GITHUB_ENV is not set");
-            process.exit(1);
-          }
-
-          fs.appendFileSync(
-            githubEnv,
-            `DATABASE_URL<<EOF\n${finalUrl}\nEOF\n`
+          const url = new URL(
+            "postgresql://postgres.la4e9pgvuhqw@aws-us-east-1-1.pg.psdb.cloud:5432/postgres"
           );
 
-          console.log("BlueJob database connection prepared successfully");
+          url.password = secret;
+          url.searchParams.set("sslmode", "require");
+          url.searchParams.set("options", "-c search_path=bluejob");
+
+          const finalUrl = url.toString();
+
+          console.log(`::add-mask::${finalUrl}`);
+
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `DATABASE_URL=${finalUrl}\n`
+          );
+
+          console.log("PlanetScale connection built successfully");
           NODE
 
       - name: Run database migrations
