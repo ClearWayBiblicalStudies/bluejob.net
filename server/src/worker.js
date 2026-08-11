@@ -1,7 +1,6 @@
 import { Client } from "pg";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
-const publicPaths = new Set(["/api/healthz", "/api/readyz", "/api/auth/register", "/api/auth/login"]);
 const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), {
     status,
@@ -175,6 +174,77 @@ async function api(request, env, db, user, path) {
     } catch (error) {
       await db.query("ROLLBACK");
       return json({ error: error.message === "FORBIDDEN" ? "Not authorized" : "Unable to award bid" }, error.message === "FORBIDDEN" ? 403 : 409);
+    }
+    const startMatch = path.match(/^\/api\/jobs\/([^/]+)\/start$/);
+    if (startMatch && request.method === "POST") {
+      const result = await db.query(
+        `UPDATE jobs j SET status='IN_PROGRESS'
+          WHERE j.id=$1 AND j.status='AWARDED' AND
+            (j.created_by=$2 OR EXISTS (SELECT 1 FROM bids b JOIN job_awards a ON a.bid_id=b.id WHERE a.job_id=j.id AND b.worker_id=$2))
+          RETURNING j.*`,
+        [startMatch[1], user.id],
+      );
+      if (!result.rowCount) return json({ error: "Job cannot be started by this participant" }, 409);
+      await db.query("INSERT INTO job_completions(job_id) VALUES($1) ON CONFLICT DO NOTHING", [startMatch[1]]);
+      return json(result.rows[0]);
+    }
+    const completeMatch = path.match(/^\/api\/jobs\/([^/]+)\/complete$/);
+    if (completeMatch && request.method === "POST") {
+      const result = await db.query(
+        `UPDATE job_completions c SET worker_confirmed_at=CASE WHEN b.worker_id=$2 THEN COALESCE(c.worker_confirmed_at,now()) ELSE c.worker_confirmed_at END,
+            contractor_confirmed_at=CASE WHEN j.created_by=$2 THEN COALESCE(c.contractor_confirmed_at,now()) ELSE c.contractor_confirmed_at END
+          FROM jobs j JOIN job_awards a ON a.job_id=j.id JOIN bids b ON b.id=a.bid_id
+         WHERE c.job_id=$1 AND j.status IN ('IN_PROGRESS','COMPLETION_PENDING') AND (j.created_by=$2 OR b.worker_id=$2)
+         RETURNING c.*, j.created_by, b.worker_id`,
+        [completeMatch[1], user.id],
+      );
+      if (!result.rowCount) return json({ error: "Job completion confirmation is not authorized" }, 403);
+      const completion = result.rows[0];
+      const status = completion.worker_confirmed_at && completion.contractor_confirmed_at ? "COMPLETED" : "COMPLETION_PENDING";
+      await db.query("UPDATE jobs SET status=$1 WHERE id=$2", [status, completeMatch[1]]);
+      return json({ status });
+    }
+    const feedbackMatch = path.match(/^\/api\/jobs\/([^/]+)\/feedback$/);
+    if (feedbackMatch && request.method === "POST") {
+      const input = await body(request);
+      const job = await db.query("SELECT j.*, a.bid_id, b.worker_id FROM jobs j JOIN job_awards a ON a.job_id=j.id JOIN bids b ON b.id=a.bid_id WHERE j.id=$1 AND j.status='COMPLETED'", [feedbackMatch[1]]);
+      if (!job.rowCount) return json({ error: "Feedback requires a completed job" }, 409);
+      const row = job.rows[0];
+      if (user.id === row.created_by) {
+        await db.query("INSERT INTO worker_feedback(job_id,worker_id,contractor_id,quality,reliability,communication,schedule_performance,scope_execution,would_hire_again) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [row.id, row.worker_id, user.id, input.quality, input.reliability, input.communication, input.schedulePerformance, input.scopeExecution, input.wouldHireAgain]);
+      } else if (user.id === row.worker_id) {
+        await db.query("INSERT INTO contractor_feedback(job_id,worker_id,company_id,payment_reliability,scope_accuracy,project_readiness,communication,schedule_organization,would_work_again) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [row.id, user.id, row.company_id, input.paymentReliability, input.scopeAccuracy, input.projectReadiness, input.communication, input.scheduleOrganization, input.wouldWorkAgain]);
+      } else return json({ error: "Not authorized" }, 403);
+      const workerScore = await db.query(
+        `SELECT avg(value)::numeric(5,2) score, count(*)::integer samples FROM (
+           SELECT quality value FROM worker_feedback WHERE worker_id=$1
+           UNION ALL SELECT reliability FROM worker_feedback WHERE worker_id=$1
+           UNION ALL SELECT communication FROM worker_feedback WHERE worker_id=$1
+         ) signals WHERE value IS NOT NULL`,
+        [row.worker_id],
+      );
+      if (workerScore.rows[0].samples) {
+        const score = Math.round(Number(workerScore.rows[0].score) * 20);
+        await db.query("INSERT INTO work_score_snapshots(user_id,score,status,factors) VALUES($1,$2,'VERIFIED',jsonb_build_object('feedbackSignals',$3))", [row.worker_id, score, workerScore.rows[0].samples]);
+      }
+      const contractorScore = await db.query(
+        `SELECT avg(value)::numeric(5,2) score, count(*)::integer samples FROM (
+           SELECT payment_reliability value FROM contractor_feedback WHERE company_id=$1
+           UNION ALL SELECT scope_accuracy FROM contractor_feedback WHERE company_id=$1
+           UNION ALL SELECT communication FROM contractor_feedback WHERE company_id=$1
+         ) signals WHERE value IS NOT NULL`,
+        [row.company_id],
+      );
+      if (contractorScore.rows[0].samples) {
+        const score = Math.round(Number(contractorScore.rows[0].score) * 20);
+        await db.query("INSERT INTO contractor_score_snapshots(company_id,score,status,factors) VALUES($1,$2,'VERIFIED',jsonb_build_object('feedbackSignals',$3))", [row.company_id, score, contractorScore.rows[0].samples]);
+      }
+      return json({ ok: true });
+    }
+    const scoreMatch = path.match(/^\/api\/work-scores\/([^/]+)$/);
+    if (scoreMatch && request.method === "GET") {
+      const result = await db.query("SELECT score,status,factors,created_at FROM work_score_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20", [scoreMatch[1]]);
+      return json({ current: result.rows[0] || { status: "BUILDING" }, history: result.rows });
     }
   }
   if (path === "/api/notifications" && request.method === "GET") {
