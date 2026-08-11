@@ -31,7 +31,7 @@ jobs:
           node <<'NODE'
           const v = process.env.DATABASE_URL || "";
 
-          console.log("DATABASE_URL present:", v.length > 0);
+          console.log("DATABASE_URL present:", v.trim().length > 0);
           if (!v.trim()) {
             console.error("DATABASE_URL is missing or empty");
             process.exit(1);
@@ -50,7 +50,7 @@ jobs:
             new URL(v.trim());
             console.log("URL parse: OK");
           } catch {
-            console.error("URL parse: INVALID");
+            console.error("DATABASE_URL is malformed (URL parse: INVALID)");
             process.exit(1);
           }
           NODE
