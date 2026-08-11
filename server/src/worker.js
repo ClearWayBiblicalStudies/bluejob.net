@@ -1,5 +1,5 @@
 export default {
-  fetch() {
+  fetch(request, env, ctx) {
     return new Response("BlueJob API");
   },
 };
