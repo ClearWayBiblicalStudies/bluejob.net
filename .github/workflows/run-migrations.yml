@@ -40,7 +40,7 @@ jobs:
             console.log("sslmode:", u.searchParams.get("sslmode"));
             console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
           } catch {
-            console.log("URL parse: INVALID");
+            console.error("URL parse: INVALID");
             process.exit(1);
           }
           '
