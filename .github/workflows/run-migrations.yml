@@ -29,24 +29,28 @@ jobs:
       - name: Check DATABASE_URL format safely
         run: |
           node <<'NODE'
-          const raw = process.env.DATABASE_URL;
-          const value = typeof raw === "string" ? raw.trim() : "";
+          const v = process.env.DATABASE_URL ?? "";
 
-          console.log("DATABASE_URL present:", value.length > 0);
-          if (!value) {
+          console.log("DATABASE_URL present:", v.trim().length > 0);
+          if (!v.trim()) {
             console.error("DATABASE_URL is missing or empty");
             process.exit(1);
           }
 
+          console.log("starts postgresql://:", v.startsWith("postgresql://"));
+          console.log("starts postgres://:", v.startsWith("postgres://"));
+          console.log("starts DATABASE_URL=:", v.startsWith("DATABASE_URL="));
+          console.log("has spaces:", v.includes(" "));
+          console.log("has newline:", v.includes("\n") || v.includes("\r"));
+          console.log("has quotes:", v.includes('"') || v.includes("'"));
+          console.log("has sslrootcert:", v.includes("sslrootcert"));
+          console.log("at-sign count:", (v.match(/@/g) || []).length);
+
           try {
-            const url = new URL(value);
+            new URL(v.trim());
             console.log("URL parse: OK");
-            console.log("protocol:", url.protocol);
-            console.log("host present:", Boolean(url.hostname));
-            console.log("sslmode:", url.searchParams.get("sslmode"));
-            console.log("has sslrootcert:", url.searchParams.has("sslrootcert"));
           } catch {
-            console.error("DATABASE_URL is malformed");
+            console.error("DATABASE_URL is malformed (URL parse: INVALID)");
             process.exit(1);
           }
           NODE
