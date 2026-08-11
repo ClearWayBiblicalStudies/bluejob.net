@@ -31,26 +31,40 @@ jobs:
           node <<'NODE'
           const fs = require("fs");
 
-          let v = process.env.DATABASE_URL || "";
+          let raw = process.env.DATABASE_URL || "";
+          raw = raw.trim();
 
-          // Clean common copy/paste problems
-          v = v.trim();
-          v = v.replace(/^DATABASE_URL=/, "");
-          v = v.replace(/^["']|["']$/g, "");
-          v = v.replace(/[\r\n]/g, "");
-          v = v.replace(/&amp;sslrootcert=system/g, "");
-          v = v.replace(/\?sslrootcert=system&amp;/g, "?");
-          v = v.replace(/\?sslrootcert=system$/g, "");
+          // Decode common copy/paste HTML artifacts
+          raw = raw.replace(/&amp;/g, "&");
 
-          if (!v.startsWith("postgresql://") && !v.startsWith("postgres://")) {
-            console.error("DATABASE_URL still does not look like a PostgreSQL URL");
+          // Remove common wrappers
+          raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "");
+          raw = raw.replace(/^psql\s+/i, "");
+          raw = raw.replace(/^["']|["']$/g, "");
+
+          // Extract PostgreSQL URI even if surrounded by other text
+          const match = raw.match(/postgres(?:ql)?:\/\/[^\s"'\\>)\]]+/i);
+
+          if (!match) {
+            console.error("No PostgreSQL URI found inside DATABASE_URL");
             process.exit(1);
           }
 
+          let v = match[0];
+
+          // Remove unsupported certificate option
+          v = v.replace(/&sslrootcert=system/gi, "");
+          v = v.replace(/\?sslrootcert=system&/gi, "?");
+          v = v.replace(/\?sslrootcert=system$/gi, "");
+
           try {
-            new URL(v);
+            const u = new URL(v);
+
+            if (!["postgresql:", "postgres:"].includes(u.protocol)) {
+              throw new Error("Wrong protocol");
+            }
           } catch {
-            console.error("DATABASE_URL still cannot be parsed after normalization");
+            console.error("Extracted PostgreSQL URI is still invalid");
             process.exit(1);
           }
 
