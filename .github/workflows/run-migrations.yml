@@ -28,42 +28,16 @@ jobs:
       - name: Install server dependencies
         run: npm ci
 
-      - name: Prepare DATABASE_URL
-        shell: bash
+      - name: Validate DATABASE_URL
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "DATABASE_URL secret is missing"
             exit 1
           fi
-
-          CLEAN_URL="$(printf '%s' "$DATABASE_URL" | tr -d '\r\n')"
-
-          CLEAN_URL="${CLEAN_URL#DATABASE_URL=}"
-          CLEAN_URL="${CLEAN_URL#psql }"
-          CLEAN_URL="${CLEAN_URL#\"}"
-          CLEAN_URL="${CLEAN_URL%\"}"
-          CLEAN_URL="${CLEAN_URL#\'}"
-          CLEAN_URL="${CLEAN_URL%\'}"
-
-          CLEAN_URL="${CLEAN_URL//&amp;/&}"
-          CLEAN_URL="${CLEAN_URL//&sslrootcert=system/}"
-          CLEAN_URL="${CLEAN_URL//sslrootcert=system&/}"
-          CLEAN_URL="${CLEAN_URL//?sslrootcert=system/?}"
-
-          if [[ "$CLEAN_URL" != postgres://* && "$CLEAN_URL" != postgresql://* ]]; then
-            echo "DATABASE_URL does not contain a valid PostgreSQL URI"
-            exit 1
-          fi
-
-          echo "::add-mask::$CLEAN_URL"
-
-          {
-            echo "DATABASE_URL<<BLUEJOB_DB_URL"
-            echo "$CLEAN_URL"
-            echo "BLUEJOB_DB_URL"
-          } >> "$GITHUB_ENV"
-
-          echo "DATABASE_URL prepared successfully"
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL is set"
 
       - name: Run database migrations
         run: npm run migrate
+        env:
+          NODE_ENV: production
