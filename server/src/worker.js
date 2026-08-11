@@ -16,6 +16,7 @@ export default {
 
     if (pathname === "/api/readyz") {
       let connected = false;
+      let response;
       const client = new Client({
         connectionString: env.HYPERDRIVE?.connectionString,
       });
@@ -24,9 +25,9 @@ export default {
         await client.connect();
         connected = true;
         await client.query("SELECT 1 AS ready");
-        return jsonResponse({ ok: true, database: "ready" });
+        response = jsonResponse({ ok: true, database: "ready" });
       } catch {
-        return jsonResponse(
+        response = jsonResponse(
           { ok: false, database: "unavailable" },
           503,
         );
@@ -35,6 +36,8 @@ export default {
           await client.end().catch(() => {});
         }
       }
+
+      return response;
     }
 
     return new Response("BlueJob API");
