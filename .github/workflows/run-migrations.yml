@@ -38,7 +38,7 @@ jobs:
             console.log("has sslrootcert:", u.searchParams.has("sslrootcert"));
           } catch {
             console.error("DATABASE_URL is missing or invalid");
-            process.exitCode = 1;
+            process.exit(1);
           }
           '
 
