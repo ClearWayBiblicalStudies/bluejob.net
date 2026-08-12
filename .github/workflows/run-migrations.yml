@@ -183,10 +183,13 @@ jobs:
           // Prevent Node pg from attempting to open a file named "system".
           url.searchParams.delete("sslrootcert");
 
-          // Keep SSL verification enabled.
+          // Use sslmode=require (encrypted, no certificate verification).
+          // sslmode=verify-full can route through a restricted connection
+          // path on PlanetScale when no CA cert is present, which prevents
+          // DDL operations like CREATE SCHEMA.
           url.searchParams.set(
             "sslmode",
-            "verify-full"
+            "require"
           );
 
           const cleanUrl = url.toString();
@@ -234,7 +237,8 @@ jobs:
             const client = new Client({
               connectionString: process.env.DATABASE_URL,
               connectionTimeoutMillis: 15000,
-              statement_timeout: 30000
+              statement_timeout: 30000,
+              ssl: { rejectUnauthorized: false }
             });
 
             try {
@@ -399,6 +403,7 @@ jobs:
       - name: "BLUEJOB 6/7 — RUN PRODUCTION MIGRATIONS"
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+          NODE_ENV: production
         run: |
           echo ""
           echo "=========================================="
@@ -429,7 +434,8 @@ jobs:
           async function main() {
             const client = new Client({
               connectionString: process.env.DATABASE_URL,
-              connectionTimeoutMillis: 15000
+              connectionTimeoutMillis: 15000,
+              ssl: { rejectUnauthorized: false }
             });
 
             await client.connect();
