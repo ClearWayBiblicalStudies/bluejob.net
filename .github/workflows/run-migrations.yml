@@ -291,8 +291,34 @@ jobs:
 
               if (!schemaExists.rows[0].schema_exists) {
                 console.log("bluejob schema not found — creating it now...");
-                await client.query(`CREATE SCHEMA IF NOT EXISTS bluejob`);
-                console.log("bluejob schema created.");
+                try {
+                  await client.query(`CREATE SCHEMA IF NOT EXISTS bluejob`);
+                  console.log("bluejob schema created.");
+                } catch (createError) {
+                  if (createError.code === "42501") {
+                    // The database user lacks CREATE privilege on the database.
+                    // This is expected on PlanetScale when the schema is pre-created
+                    // by the provider. Re-check whether the schema now exists.
+                    console.log(
+                      "CREATE SCHEMA returned 42501 (permission denied) — " +
+                      "re-checking whether bluejob schema was pre-created..."
+                    );
+                    const recheck = await client.query(`
+                      SELECT to_regnamespace('bluejob') IS NOT NULL AS schema_exists
+                    `);
+                    if (!recheck.rows[0].schema_exists) {
+                      throw new Error(
+                        "bluejob schema does not exist and the database user " +
+                        "lacks permission to create it (error 42501). " +
+                        "Grant CREATE on database to the migration user, " +
+                        "or pre-create the bluejob schema manually."
+                      );
+                    }
+                    console.log("bluejob schema exists (pre-created by provider).");
+                  } else {
+                    throw createError;
+                  }
+                }
               }
 
               await client.query(`
