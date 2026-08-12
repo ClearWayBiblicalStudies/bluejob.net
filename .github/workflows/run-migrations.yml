@@ -54,6 +54,7 @@ jobs:
           }
           url.searchParams.delete("sslrootcert");
           url.searchParams.set("sslmode", "require");
+          console.log(`::add-mask::${decodeURIComponent(url.password)}`);
           const cleanUrl = url.toString();
           console.log(`::add-mask::${cleanUrl}`);
           fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`);
@@ -104,9 +105,11 @@ jobs:
           node <<'NODE'
           const { Client } = require("pg");
           const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000, ssl: { rejectUnauthorized: false } });
+          let connected = false;
           async function main() {
-            await client.connect();
             try {
+              await client.connect();
+              connected = true;
               const migrations = await client.query("SELECT to_regclass('bluejob.schema_migrations') AS table_name");
               if (!migrations.rows[0].table_name) throw new Error("bluejob.schema_migrations does not exist.");
               const tables = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'bluejob'");
@@ -116,7 +119,7 @@ jobs:
               console.log("migration_table: bluejob.schema_migrations");
               console.log("application_tables: users, jobs");
             } finally {
-              await client.end();
+              if (connected) await client.end();
             }
           }
           main().catch(error => { console.error("BlueJob verification failed:", error.message); process.exit(1); });
