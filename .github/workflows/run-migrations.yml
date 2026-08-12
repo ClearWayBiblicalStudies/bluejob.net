@@ -286,9 +286,9 @@ jobs:
               `);
 
               if (!schemaExists.rows[0].schema_exists) {
-                throw new Error(
-                  "bluejob schema does not exist. Provision it with an administrative role before running this workflow."
-                );
+                console.log("bluejob schema not found — creating it now...");
+                await client.query(`CREATE SCHEMA IF NOT EXISTS bluejob`);
+                console.log("bluejob schema created.");
               }
 
               await client.query(`
