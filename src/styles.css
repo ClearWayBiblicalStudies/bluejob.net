@@ -1,59 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  font-family: "Inter", sans-serif;
-  --blue: #0969f5; --blue-dark: #034ec4; --navy: #061b40;
-  --text: #0b1930; --muted: #65738a; --border: #e4e9f0;
-  --background: #ffffff; --light: #f6f9fd;
-}
-body { background: var(--background); color: var(--text); }
-button, a { font: inherit; }
-button { cursor: pointer; }
-.app { min-height: 100vh; }
-.navbar, .hero, .features { width: min(1200px, calc(100% - 40px)); margin: 0 auto; }
-.navbar { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-.brand img { width: 190px; display: block; }
-nav { display: flex; gap: 32px; }
-nav a { text-decoration: none; color: #48556b; font-weight: 600; font-size: 14px; }
-nav a:hover { color: var(--blue); }
-.navActions { display: flex; align-items: center; gap: 10px; }
-.loginButton { background: transparent; border: none; font-weight: 700; padding: 12px 18px; color: var(--navy); }
-.primaryButton { background: var(--blue); color: white; border: none; border-radius: 10px; padding: 13px 20px; font-weight: 700; }
-.primaryButton:hover { background: var(--blue-dark); }
-.hero { min-height: 620px; display: grid; grid-template-columns: 1.15fr 0.85fr; align-items: center; gap: 80px; }
-.heroContent { max-width: 680px; }
-.eyebrow { display: inline-flex; align-items: center; gap: 8px; background: #eef5ff; color: var(--blue); border-radius: 50px; padding: 9px 14px; font-size: 13px; font-weight: 700; margin-bottom: 24px; }
-h1 { font-size: clamp(52px, 6vw, 78px); line-height: .98; letter-spacing: -4px; font-weight: 900; color: var(--navy); }
-h1 span { display: block; color: var(--blue); }
-.heroDescription { max-width: 620px; margin-top: 28px; color: var(--muted); font-size: 19px; line-height: 1.65; }
-.heroButtons { display: flex; gap: 12px; margin-top: 30px; }
-.large { min-height: 54px; padding: 0 24px; display: inline-flex; align-items: center; gap: 10px; }
-.secondaryButton { border: 1px solid var(--border); background: white; color: var(--navy); border-radius: 10px; font-weight: 700; }
-.trustLine { display: flex; align-items: center; gap: 8px; margin-top: 26px; color: #53637a; font-size: 14px; font-weight: 600; }
-.scoreCard { background: radial-gradient(circle at top right, #e7f1ff, transparent 45%), white; border: 1px solid #dce5ef; border-radius: 24px; padding: 34px; box-shadow: 0 30px 70px rgba(16, 49, 92, .12); }
-.scoreHeader { display: flex; justify-content: space-between; align-items: flex-start; }
-.smallLabel { color: var(--blue); font-weight: 900; letter-spacing: 2px; font-size: 11px; }
-.scoreHeader h3 { margin-top: 5px; font-size: 22px; color: var(--navy); }
-.verified { display: flex; align-items: center; gap: 6px; color: #15774e; background: #e9f8f1; padding: 8px 11px; border-radius: 30px; font-size: 12px; font-weight: 700; }
-.score { font-size: 96px; font-weight: 900; letter-spacing: -7px; margin-top: 28px; color: var(--navy); }
-.scoreLabel { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: 1.2px; }
-.scoreBar { margin-top: 22px; width: 100%; height: 9px; border-radius: 20px; background: #e8edf5; overflow: hidden; }
-.scoreProgress { width: 84%; height: 100%; background: var(--blue); border-radius: 20px; }
-.scoreStats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 32px; padding-top: 25px; border-top: 1px solid var(--border); }
-.scoreStats div { display: flex; flex-direction: column; gap: 5px; }
-.scoreStats strong { font-size: 20px; color: var(--navy); }
-.scoreStats span { font-size: 11px; color: var(--muted); }
-.features { margin-bottom: 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.feature { border: 1px solid var(--border); padding: 30px; border-radius: 18px; background: white; }
-.iconBox { width: 46px; height: 46px; border-radius: 11px; display: grid; place-items: center; color: var(--blue); background: #eef5ff; margin-bottom: 20px; }
-.feature h3 { color: var(--navy); font-size: 18px; margin-bottom: 10px; }
-.feature p { color: var(--muted); line-height: 1.6; font-size: 14px; }
-@media (max-width: 850px) {
-  nav, .loginButton { display: none; }
-  .brand img { width: 145px; }
-  .hero { grid-template-columns: 1fr; gap: 30px; padding: 70px 0; }
-  h1 { letter-spacing: -2px; }
-  .features { grid-template-columns: 1fr; }
-  .score { font-size: 74px; }
-}
+:root { font-family: "Inter", sans-serif; --blue: #0969f5; --blue-dark: #034ec4; --navy: #061b40; --muted: #65738a; --border: #e4e9f0; --light: #f6f9fd; }
+body { background: #fff; color: #0b1930; } button, a { font: inherit; } a { text-decoration: none; } .app { min-height: 100vh; }
+.navbar, .hero, .features, .footerInner { width: min(1200px, calc(100% - 40px)); margin: 0 auto; }
+.navbar { min-height: 96px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); gap: 24px; }
+.brandMark { display: inline-block; } .brandMark img { width: 218px; height: auto; display: block; } .brandMark.compact img { width: 116px; }
+nav { display: flex; gap: 32px; } nav a { color: #48556b; font-size: 14px; font-weight: 600; } nav a:hover, .backHome:hover { color: var(--blue); }
+.navActions { display: flex; align-items: center; gap: 10px; } .loginButton { border: 0; color: var(--navy); font-weight: 700; padding: 10px 14px; } .primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--blue); color: #fff; border: 0; border-radius: 10px; padding: 13px 20px; font-weight: 700; } .primaryButton:hover { background: var(--blue-dark); } .joinButton { padding: 11px 16px; font-size: 14px; }
+.hero { min-height: 620px; display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: 80px; }.heroContent { max-width: 680px; }.eyebrow { display: inline-flex; align-items: center; gap: 8px; background: #eef5ff; color: var(--blue); border-radius: 50px; padding: 9px 14px; font-size: 13px; font-weight: 700; margin-bottom: 24px; }h1 { font-size: clamp(52px, 6vw, 78px); line-height: .98; letter-spacing: -4px; font-weight: 900; color: var(--navy); } h1 span { display: block; color: var(--blue); }.heroDescription { max-width: 620px; margin-top: 28px; color: var(--muted); font-size: 19px; line-height: 1.65; }.heroButtons { display: flex; gap: 12px; margin-top: 30px; }.large { min-height: 54px; padding: 0 24px; }.secondaryButton { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: white; color: var(--navy); border-radius: 10px; font-weight: 700; }.trustLine { display: flex; align-items: center; gap: 8px; margin-top: 26px; color: #53637a; font-size: 14px; font-weight: 600; }
+.scoreCard { background: radial-gradient(circle at top right, #e7f1ff, transparent 45%), #fff; border: 1px solid #dce5ef; border-radius: 24px; padding: 34px; box-shadow: 0 30px 70px rgba(16, 49, 92, .12); }.scoreHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }.scoreHeader .brandMark img { width: 104px; }.scoreHeader h3 { margin-top: 8px; font-size: 22px; color: var(--navy); }.verified { display: flex; align-items: center; gap: 6px; color: #15774e; background: #e9f8f1; padding: 8px 11px; border-radius: 30px; font-size: 12px; font-weight: 700; }.score { font-size: 96px; font-weight: 900; letter-spacing: -7px; margin-top: 28px; color: var(--navy); }.scoreLabel, .productLabel { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: 1.2px; }.scoreBar { margin-top: 22px; width: 100%; height: 9px; border-radius: 20px; background: #e8edf5; overflow: hidden; }.scoreProgress { width: 84%; height: 100%; background: var(--blue); border-radius: 20px; }.scoreStats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 32px; padding-top: 25px; border-top: 1px solid var(--border); }.scoreStats div { display: flex; flex-direction: column; gap: 5px; }.scoreStats strong { font-size: 20px; color: var(--navy); }.scoreStats span { font-size: 11px; color: var(--muted); }
+.features { margin-bottom: 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }.feature { border: 1px solid var(--border); padding: 30px; border-radius: 18px; background: #fff; }.iconBox { width: 46px; height: 46px; border-radius: 11px; display: grid; place-items: center; color: var(--blue); background: #eef5ff; margin-bottom: 20px; }.feature h3 { color: var(--navy); font-size: 18px; margin: 8px 0 10px; }.feature p { color: var(--muted); line-height: 1.6; font-size: 14px; }.feature .productLabel { color: var(--blue); }.featureBrand { display: flex; align-items: center; gap: 7px; color: var(--blue); font-size: 12px; font-weight: 800; }.featureBrand .brandMark img { width: 82px; }
+.footer { background: var(--navy); color: #dbe7fb; padding: 42px 0 30px; }.footerInner { display: grid; grid-template-columns: 1fr auto; gap: 30px; }.footerBrand p, .trademark { margin-top: 12px; color: #aebed8; font-size: 12px; line-height: 1.6; }.footerLinks { justify-content: flex-end; flex-wrap: wrap; gap: 12px 20px; }.footerLinks a { color: #fff; font-size: 13px; }.trademark { grid-column: 1 / -1; max-width: 720px; }
+.legalPage { width: min(800px, calc(100% - 40px)); margin: 76px auto; }.backHome { color: var(--navy); font-weight: 700; }.legalEyebrow { color: var(--blue); font-weight: 800; margin-bottom: 14px; }.legalPage h1 { font-size: clamp(40px, 6vw, 58px); letter-spacing: -3px; }.legalIntro { color: var(--muted); font-size: 18px; line-height: 1.7; margin: 24px 0 40px; }.legalPage section { border-top: 1px solid var(--border); padding: 28px 0; }.legalPage h2 { color: var(--navy); font-size: 20px; margin-bottom: 10px; }.legalPage section p { color: var(--muted); line-height: 1.7; }
+@media (max-width: 850px) { nav:not(.footerLinks), .loginButton { display: none; }.navbar { min-height: 82px; gap: 12px; }.brandMark img { width: 182px; }.joinButton { padding: 10px 12px; font-size: 13px; }.hero { grid-template-columns: 1fr; gap: 30px; padding: 58px 0; }.heroContent { max-width: none; } h1 { letter-spacing: -2px; }.features { grid-template-columns: 1fr; margin-bottom: 56px; }.score { font-size: 74px; }.footerInner { grid-template-columns: 1fr; gap: 24px; }.footerLinks { justify-content: flex-start; gap: 14px 18px; }.legalPage { margin: 48px auto; } }
+@media (max-width: 380px) { .navbar, .hero, .features, .footerInner { width: min(100% - 28px, 1200px); }.brandMark img { width: 157px; }.joinButton { padding: 9px 10px; font-size: 12px; }.scoreCard { padding: 24px; }.verified { padding: 7px 9px; }.scoreHeader .brandMark img { width: 90px; } }
