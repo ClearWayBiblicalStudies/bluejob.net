@@ -1,72 +1,507 @@
-name: Run BlueJob Migrations
+name: BlueJob Production Database Launch
 
 on:
   workflow_dispatch:
 
+concurrency:
+  group: bluejob-production-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   migrate:
+    name: BlueJob Production Migration
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     defaults:
       run:
         working-directory: server
 
     steps:
-      - name: Checkout main
+      # ==========================================================
+      # 1. GET THE EXACT CURRENT MAIN BRANCH
+      # ==========================================================
+      - name: "BLUEJOB 1/7 — Checkout current main"
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Setup Node.js
+      # ==========================================================
+      # 2. NODE ENVIRONMENT
+      # ==========================================================
+      - name: "BLUEJOB 2/7 — Setup Node"
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
 
-      - name: Install server dependencies
-        run: npm install
+      - name: "Install server dependencies"
+        run: npm ci
 
-      - name: Build PlanetScale connection
+      # ==========================================================
+      # 3. VERIFY WE ARE NOT RUNNING OLD/BROKEN MIGRATION CODE
+      # ==========================================================
+      - name: "BLUEJOB 3/7 — Verify migration engine"
         shell: bash
-        env:
-          PLANETSCALE_PASSWORD: ${{ secrets.DATABASE_URL }}
         run: |
           node <<'NODE'
           const fs = require("fs");
 
-          let secret = (process.env.PLANETSCALE_PASSWORD || "").trim();
+          console.log("");
+          console.log("==========================================");
+          console.log(" BLUEJOB MIGRATION ENGINE CHECK");
+          console.log("==========================================");
 
-          if (!secret) {
-            throw new Error("DATABASE_URL secret is empty");
-          }
-
-          // If the secret is already a URI, extract its password.
-          if (secret.startsWith("postgresql://") || secret.startsWith("postgres://")) {
-            const supplied = new URL(secret);
-            secret = decodeURIComponent(supplied.password);
-          }
-
-          // Mask it BEFORE doing anything else.
-          console.log(`::add-mask::${secret}`);
-
-          const url = new URL(
-            "postgresql://postgres.la4e9pgvuhqw@aws-us-east-1-1.pg.psdb.cloud:5432/postgres"
+          const pkg = JSON.parse(
+            fs.readFileSync("package.json", "utf8")
           );
 
-          url.password = secret;
-          url.searchParams.set("sslmode", "require");
-          url.searchParams.set("options", "-c search_path=bluejob");
+          if (!pkg.scripts || !pkg.scripts.migrate) {
+            throw new Error(
+              "server/package.json does not contain a migrate script"
+            );
+          }
 
-          const finalUrl = url.toString();
+          console.log("npm migrate command:", pkg.scripts.migrate);
 
-          console.log(`::add-mask::${finalUrl}`);
+          if (!fs.existsSync("migrate.js")) {
+            throw new Error("server/migrate.js does not exist");
+          }
 
-          fs.appendFileSync(
-            process.env.GITHUB_ENV,
-            `DATABASE_URL=${finalUrl}\n`
-          );
+          const migrationEngine =
+            fs.readFileSync("migrate.js", "utf8");
 
-          console.log("PlanetScale connection built successfully");
+          if (
+            /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+schema_migrations/i
+              .test(migrationEngine)
+          ) {
+            throw new Error(
+              "OLD MIGRATION ENGINE DETECTED: schema_migrations is still unqualified"
+            );
+          }
+
+          if (!migrationEngine.includes("bluejob")) {
+            throw new Error(
+              "Migration engine does not reference the bluejob schema"
+            );
+          }
+
+          console.log("Migration engine: CURRENT");
+          console.log("Target schema: bluejob");
+          console.log("Old public-schema migration path: NOT DETECTED");
+          console.log("Migration engine check: PASS");
           NODE
 
-      - name: Run database migrations
-        run: npm run migrate
+      # ==========================================================
+      # 4. VALIDATE THE FULL PLANETSCALE URI
+      # ==========================================================
+      - name: "BLUEJOB 4/7 — Validate PlanetScale connection"
+        shell: bash
+        env:
+          BLUEJOB_DATABASE_SECRET: ${{ secrets.DATABASE_URL }}
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+
+          function stop(message) {
+            console.error("");
+            console.error("❌ BLUEJOB DATABASE CONFIGURATION FAILED");
+            console.error(message);
+            process.exit(1);
+          }
+
+          const raw =
+            (process.env.BLUEJOB_DATABASE_SECRET || "").trim();
+
+          if (!raw) {
+            stop("DATABASE_URL repository secret is empty.");
+          }
+
+          // Hide full credential immediately.
+          console.log(`::add-mask::${raw}`);
+
+          if (
+            !raw.startsWith("postgresql://") &&
+            !raw.startsWith("postgres://")
+          ) {
+            stop(
+              "DATABASE_URL must contain the COMPLETE PlanetScale URI beginning with postgresql://"
+            );
+          }
+
+          let url;
+
+          try {
+            url = new URL(raw);
+          } catch {
+            stop("DATABASE_URL cannot be parsed as a PostgreSQL URI.");
+          }
+
+          const username =
+            decodeURIComponent(url.username || "");
+
+          const password =
+            decodeURIComponent(url.password || "");
+
+          console.log(`::add-mask::${password}`);
+
+          const host = url.hostname || "";
+          const database =
+            (url.pathname || "").replace(/^\//, "");
+
+          if (!username) {
+            stop("Database username is missing.");
+          }
+
+          if (!password) {
+            stop("Database password is missing.");
+          }
+
+          if (!username.startsWith("postgres.")) {
+            stop(
+              `Migration must use the PlanetScale DEFAULT role. Received user: ${username}`
+            );
+          }
+
+          if (!host.endsWith(".pg.psdb.cloud")) {
+            stop(
+              `Unexpected PlanetScale hostname: ${host}`
+            );
+          }
+
+          if (!database) {
+            stop("Database name is missing.");
+          }
+
+          // Prevent Node pg from attempting to open a file named "system".
+          url.searchParams.delete("sslrootcert");
+
+          // Keep SSL verification enabled.
+          url.searchParams.set(
+            "sslmode",
+            "verify-full"
+          );
+
+          const cleanUrl = url.toString();
+
+          console.log(`::add-mask::${cleanUrl}`);
+
+          // Safe multiline GitHub environment export.
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`
+          );
+
+          console.log("");
+          console.log("==========================================");
+          console.log(" BLUEJOB DATABASE TARGET");
+          console.log("==========================================");
+          console.log("Provider: PlanetScale PostgreSQL");
+          console.log("Host:", host);
+          console.log("User:", username);
+          console.log("Database:", database);
+          console.log("Target schema: bluejob");
+          console.log("Credential: MASKED");
+          console.log("Connection format: PASS");
+          NODE
+
+      # ==========================================================
+      # 5. HIT PLANETSCALE BEFORE REAL MIGRATIONS
+      # ==========================================================
+      - name: "BLUEJOB 5/7 — PlanetScale preflight"
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          node <<'NODE'
+          const pg = require("pg");
+          const { Client } = pg;
+
+          async function main() {
+            console.log("");
+            console.log("==========================================");
+            console.log(" HITTING PLANETSCALE");
+            console.log("==========================================");
+            console.log("[1] Authenticating...");
+
+            const client = new Client({
+              connectionString: process.env.DATABASE_URL,
+              connectionTimeoutMillis: 15000,
+              statement_timeout: 30000
+            });
+
+            try {
+              await client.connect();
+            } catch (error) {
+              console.error("");
+              console.error("❌ BLUEJOB AUTHENTICATION FAILED");
+
+              if (error.code === "28P01") {
+                console.error(
+                  "PlanetScale rejected the username/password pair."
+                );
+              } else {
+                console.error(error.message);
+              }
+
+              if (error.code) {
+                console.error(
+                  "PostgreSQL code:",
+                  error.code
+                );
+              }
+
+              process.exit(1);
+            }
+
+            try {
+              const identity = await client.query(`
+                SELECT
+                  current_user,
+                  current_database()
+              `);
+
+              console.log(
+                "Authenticated as:",
+                identity.rows[0].current_user
+              );
+
+              console.log(
+                "Database:",
+                identity.rows[0].current_database
+              );
+
+              console.log("[2] Preparing bluejob schema...");
+
+              await client.query(`
+                CREATE SCHEMA IF NOT EXISTS bluejob
+                AUTHORIZATION CURRENT_USER
+              `);
+
+              await client.query(`
+                SET search_path TO bluejob
+              `);
+
+              const schemaCheck = await client.query(`
+                SELECT
+                  current_schema() AS current_schema,
+                  current_setting('search_path') AS search_path,
+                  has_schema_privilege(
+                    current_user,
+                    'bluejob',
+                    'USAGE'
+                  ) AS can_use,
+                  has_schema_privilege(
+                    current_user,
+                    'bluejob',
+                    'CREATE'
+                  ) AS can_create
+              `);
+
+              const info = schemaCheck.rows[0];
+
+              console.log(
+                "Current schema:",
+                info.current_schema
+              );
+
+              console.log(
+                "Search path:",
+                info.search_path
+              );
+
+              console.log(
+                "USAGE permission:",
+                info.can_use
+              );
+
+              console.log(
+                "CREATE permission:",
+                info.can_create
+              );
+
+              if (!info.can_use || !info.can_create) {
+                throw new Error(
+                  "Database user does not own/have required access to bluejob schema"
+                );
+              }
+
+              console.log("[3] Testing real CREATE permission...");
+
+              await client.query("BEGIN");
+
+              try {
+                await client.query(`
+                  CREATE TABLE bluejob.__bluejob_launch_probe (
+                    id BIGINT PRIMARY KEY
+                  )
+                `);
+
+                await client.query("ROLLBACK");
+              } catch (error) {
+                await client.query("ROLLBACK");
+                throw error;
+              }
+
+              console.log("");
+              console.log("✅ PLANETSCALE AUTHENTICATION PASSED");
+              console.log("✅ BLUEJOB SCHEMA ACCESS PASSED");
+              console.log("✅ DATABASE CREATE TEST PASSED");
+              console.log("");
+              console.log("DATABASE IS CLEARED FOR MIGRATION");
+
+            } catch (error) {
+              console.error("");
+              console.error(
+                "❌ BLUEJOB DATABASE PREFLIGHT FAILED"
+              );
+              console.error(error.message);
+
+              if (error.code) {
+                console.error(
+                  "PostgreSQL code:",
+                  error.code
+                );
+              }
+
+              process.exitCode = 1;
+              throw error;
+            } finally {
+              await client.end();
+            }
+          }
+
+          main().catch(error => {
+            console.error(
+              "Unexpected BlueJob preflight failure:",
+              error.message
+            );
+            process.exit(1);
+          });
+          NODE
+
+      # ==========================================================
+      # 6. REAL BLUEJOB MIGRATIONS
+      # ==========================================================
+      - name: "BLUEJOB 6/7 — RUN PRODUCTION MIGRATIONS"
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          echo ""
+          echo "=========================================="
+          echo " BLUEJOB PRODUCTION MIGRATION"
+          echo "=========================================="
+          echo ""
+          echo "PlanetScale preflight passed."
+          echo "Starting production migrations..."
+          echo ""
+
+          npm run migrate
+
+          echo ""
+          echo "Migration command completed."
+
+      # ==========================================================
+      # 7. VERIFY DATABASE AFTER MIGRATION
+      # ==========================================================
+      - name: "BLUEJOB 7/7 — Verify production database"
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          node <<'NODE'
+          const pg = require("pg");
+          const { Client } = pg;
+
+          async function main() {
+            const client = new Client({
+              connectionString: process.env.DATABASE_URL,
+              connectionTimeoutMillis: 15000
+            });
+
+            await client.connect();
+
+            try {
+              const migrationTable = await client.query(`
+                SELECT
+                  to_regclass(
+                    'bluejob.schema_migrations'
+                  ) AS migration_table
+              `);
+
+              if (!migrationTable.rows[0].migration_table) {
+                throw new Error(
+                  "bluejob.schema_migrations does not exist"
+                );
+              }
+
+              const migrations = await client.query(`
+                SELECT COUNT(*)::integer AS count
+                FROM bluejob.schema_migrations
+              `);
+
+              const tables = await client.query(`
+                SELECT tablename
+                FROM pg_tables
+                WHERE schemaname = 'bluejob'
+                ORDER BY tablename
+              `);
+
+              console.log("");
+              console.log("==========================================");
+              console.log(" BLUEJOB DATABASE VERIFICATION");
+              console.log("==========================================");
+
+              console.log(
+                "Applied migrations:",
+                migrations.rows[0].count
+              );
+
+              console.log(
+                "BlueJob tables:",
+                tables.rows
+                  .map(row => row.tablename)
+                  .join(", ")
+              );
+
+              // schema_migrations is the one tracking table; we require at least one actual app table beyond it.
+              const minimumExpectedBluejobTables = 2;
+              if (tables.rows.length < minimumExpectedBluejobTables) {
+                throw new Error(
+                  "Migration completed but expected BlueJob application tables were not found"
+                );
+              }
+
+              console.log("");
+              console.log("✅ DATABASE CONNECTED");
+              console.log("✅ BLUEJOB SCHEMA ACTIVE");
+              console.log("✅ MIGRATIONS APPLIED");
+              console.log("✅ TABLES VERIFIED");
+              console.log("");
+              console.log("==========================================");
+              console.log(" 🚀 BLUEJOB DATABASE LAUNCH COMPLETE");
+              console.log("==========================================");
+
+              await client.end();
+
+            } catch (error) {
+              await client.end();
+
+              console.error("");
+              console.error(
+                "❌ BLUEJOB POST-MIGRATION VERIFICATION FAILED"
+              );
+              console.error(error.message);
+              process.exit(1);
+            }
+          }
+
+          main().catch(error => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
