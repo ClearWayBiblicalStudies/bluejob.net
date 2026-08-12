@@ -452,25 +452,24 @@ jobs:
             await client.connect();
 
             try {
-              const migrationTables = await client.query(`
+              const schemaExists = await client.query(`
                 SELECT
-                  to_regclass(
-                    'bluejob.schema_migrations'
-                  ) AS bluejob_migration_table,
-                  to_regclass(
-                    'public.schema_migrations'
-                  ) AS public_migration_table
+                  to_regnamespace('bluejob') IS NOT NULL AS schema_exists
               `);
               const targetSchema =
-                migrationTables.rows[0].bluejob_migration_table
+                schemaExists.rows[0].schema_exists
                   ? "bluejob"
-                  : migrationTables.rows[0].public_migration_table
-                    ? "public"
-                    : null;
+                  : "public";
+              const migrationTable = await client.query(`
+                SELECT
+                  to_regclass(
+                    '${targetSchema}.schema_migrations'
+                  ) AS migration_table
+              `);
 
-              if (!targetSchema) {
+              if (!migrationTable.rows[0].migration_table) {
                 throw new Error(
-                  "schema_migrations does not exist in bluejob or public"
+                  `${targetSchema}.schema_migrations does not exist`
                 );
               }
 

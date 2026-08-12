@@ -38,10 +38,7 @@ try {
     .filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
   for (const file of files) {
     if (applied.has(file)) continue;
-    let sql = await readFile(join(new URL("./migrations/", import.meta.url).pathname, file), "utf8");
-    if (targetSchema !== "bluejob") {
-      sql = sql.replaceAll("bluejob.", `${targetSchema}.`);
-    }
+    const sql = await readFile(join(new URL("./migrations/", import.meta.url).pathname, file), "utf8");
     await client.query("BEGIN");
     try {
       await client.query(sql);
