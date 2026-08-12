@@ -39,8 +39,9 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require("fs");
-          const raw = (process.env.BLUEJOB_DATABASE_SECRET || "").trim();
-          if (raw) console.log(`::add-mask::${raw}`);
+          const secret = process.env.BLUEJOB_DATABASE_SECRET || "";
+          console.log(`::add-mask::${secret}`);
+          const raw = secret.trim();
           const line = raw.split(/\r?\n/).map(line => line.trim()).find(
             line => /^(?:[A-Za-z_][A-Za-z0-9_]*=)?postgres(?:ql)?:\/\//i.test(line)
           );
@@ -52,6 +53,7 @@ jobs:
             throw new Error("DATABASE_URL must contain PostgreSQL credentials, host, and database.");
           }
           url.searchParams.delete("sslrootcert");
+          url.searchParams.set("sslmode", "require");
           const cleanUrl = url.toString();
           console.log(`::add-mask::${cleanUrl}`);
           fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`);
@@ -64,9 +66,11 @@ jobs:
           const { Client } = require("pg");
           const schema = "bluejob";
           const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000, statement_timeout: 30000, ssl: { rejectUnauthorized: false } });
+          let connected = false;
           async function main() {
-            await client.connect();
             try {
+              await client.connect();
+              connected = true;
               const identity = await client.query("SELECT current_user, current_database()");
               console.log("current_user:", identity.rows[0].current_user);
               console.log("current_database:", identity.rows[0].current_database);
@@ -83,7 +87,7 @@ jobs:
                 throw error;
               }
             } finally {
-              await client.end();
+              if (connected) await client.end();
             }
           }
           main().catch(error => { console.error("BlueJob preflight failed:", error.message); process.exit(1); });
