@@ -33,8 +33,10 @@ const client = new Client({
 });
 
 let lockAcquired = false;
+let connected = false;
 try {
   await client.connect();
+  connected = true;
   await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockName]);
   lockAcquired = true;
 
@@ -77,6 +79,9 @@ try {
     }
   }
 } finally {
-  if (lockAcquired) await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockName]);
-  await client.end();
+  try {
+    if (lockAcquired) await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockName]);
+  } finally {
+    if (connected) await client.end();
+  }
 }

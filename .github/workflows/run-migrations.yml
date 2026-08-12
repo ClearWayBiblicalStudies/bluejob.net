@@ -40,6 +40,7 @@ jobs:
           node <<'NODE'
           const fs = require("fs");
           const raw = (process.env.BLUEJOB_DATABASE_SECRET || "").trim();
+          if (raw) console.log(`::add-mask::${raw}`);
           const line = raw.split(/\r?\n/).map(line => line.trim()).find(
             line => /^(?:[A-Za-z_][A-Za-z0-9_]*=)?postgres(?:ql)?:\/\//i.test(line)
           );
@@ -52,7 +53,6 @@ jobs:
           }
           url.searchParams.delete("sslrootcert");
           const cleanUrl = url.toString();
-          console.log(`::add-mask::${raw}`);
           console.log(`::add-mask::${cleanUrl}`);
           fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`);
           NODE
