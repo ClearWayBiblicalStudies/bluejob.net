@@ -196,7 +196,7 @@ jobs:
           // as an alias for sslmode=verify-full, which re-introduces the
           // PlanetScale DDL restriction. Setting uselibpqcompat=true restores
           // libpq-compatible require semantics: encrypted but no certificate
-          // verification, and the DDL-capable connection path on PlanetScale.
+          // verification, and the connection path needed for migrations on PlanetScale.
           url.searchParams.set(
             "uselibpqcompat",
             "true"
@@ -291,85 +291,59 @@ jobs:
                 identity.rows[0].current_database
               );
 
-              console.log("[2] Determining migration schema...");
+              console.log("[2] Checking migration schema...");
 
               const schemaExists = await client.query(`
-                SELECT
-                  to_regnamespace('bluejob') IS NOT NULL AS schema_exists
+                SELECT EXISTS (
+                  SELECT 1
+                  FROM pg_namespace
+                  WHERE nspname = 'bluejob'
+                ) AS exists
               `);
 
               const bluejobSchemaExists =
-                schemaExists.rows[0].schema_exists;
+                schemaExists.rows[0].exists;
 
               if (!bluejobSchemaExists) {
-                throw new Error(
-                  "The 'bluejob' schema does not exist on this PlanetScale branch. " +
-                  "Schemas are pre-provisioned by PlanetScale and cannot be created at runtime."
-                );
+                throw new Error("bluejob schema is missing");
               }
 
               const targetSchema = "bluejob";
 
-              console.log("[3] Testing CREATE TABLE permission...");
+              console.log("[3] Checking schema permissions...");
+
+              const schemaPrivileges = await client.query(`
+                SELECT
+                  has_schema_privilege(
+                    current_user,
+                    'bluejob',
+                    'USAGE'
+                  ) AS can_use,
+                  has_schema_privilege(
+                    current_user,
+                    'bluejob',
+                    'CREATE'
+                  ) AS can_create
+              `);
+
+              const privileges = schemaPrivileges.rows[0];
+
+              console.log("USAGE permission:", privileges.can_use);
+              console.log("CREATE permission:", privileges.can_create);
+
+              if (!privileges.can_use || !privileges.can_create) {
+                throw new Error(
+                  "Database user does not have required access to the migration schema"
+                );
+              }
+
+              console.log("[4] Testing CREATE TABLE permission...");
 
               await client.query("BEGIN");
 
               try {
                 await client.query(`
-                  SET search_path TO ${targetSchema}
-                `);
-
-                const schemaCheck = await client.query(`
-                  SELECT
-                    current_schema() AS current_schema,
-                    current_setting('search_path') AS search_path,
-                    has_schema_privilege(
-                      current_user,
-                      '${targetSchema}',
-                      'USAGE'
-                    ) AS can_use,
-                    has_schema_privilege(
-                      current_user,
-                      '${targetSchema}',
-                      'CREATE'
-                    ) AS can_create
-                `);
-
-                const info = schemaCheck.rows[0];
-
-                console.log(
-                  "Current schema:",
-                  info.current_schema
-                );
-
-                console.log(
-                  "Search path:",
-                  info.search_path
-                );
-
-                console.log(
-                  "Migration schema:",
-                  targetSchema
-                );
-
-                console.log(
-                  "USAGE permission:",
-                  info.can_use
-                );
-
-                console.log(
-                  "CREATE permission:",
-                  info.can_create
-                );
-
-                if (!info.can_use || !info.can_create) {
-                  throw new Error(
-                    "Database user does not have required access to the migration schema"
-                  );
-                }
-
-                await client.query(`
-                  CREATE TABLE ${targetSchema}.__bluejob_launch_probe (
+                  CREATE TABLE bluejob.__bluejob_migration_probe (
                     id BIGINT PRIMARY KEY
                   )
                 `);
