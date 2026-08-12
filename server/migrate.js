@@ -11,15 +11,14 @@ try {
   const bluejobSchemaExists = (
     await client.query("SELECT to_regnamespace('bluejob') IS NOT NULL AS schema_exists")
   ).rows[0].schema_exists;
-  const targetSchema = bluejobSchemaExists ? "bluejob" : "public";
-  if (!["bluejob", "public"].includes(targetSchema)) {
-    throw new Error(`Unsupported migration schema: ${targetSchema}`);
-  }
-  const migrationTable = `${targetSchema}.schema_migrations`;
 
   if (!bluejobSchemaExists) {
-    console.log("bluejob schema not found; falling back to public schema.");
+    console.log("bluejob schema not found; creating it now.");
+    await client.query("CREATE SCHEMA bluejob");
   }
+
+  const targetSchema = "bluejob";
+  const migrationTable = `${targetSchema}.schema_migrations`;
 
   await client.query("BEGIN");
   try {

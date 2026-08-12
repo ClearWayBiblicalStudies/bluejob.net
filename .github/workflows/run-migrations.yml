@@ -91,8 +91,7 @@ jobs:
           }
 
           console.log("Migration engine: CURRENT");
-          console.log("Preferred schema: bluejob");
-          console.log("Fallback schema: public");
+          console.log("Target schema: bluejob (auto-created if missing)");
           console.log("Legacy unqualified schema_migrations path: NOT DETECTED");
           console.log("Migration engine check: PASS");
           NODE
@@ -211,8 +210,7 @@ jobs:
           console.log("Host:", host);
           console.log("User:", username);
           console.log("Database:", database);
-          console.log("Preferred schema: bluejob");
-          console.log("Fallback schema: public");
+          console.log("Target schema: bluejob (auto-created if missing)");
           console.log("Credential: MASKED");
           console.log("Connection format: PASS");
           NODE
@@ -290,83 +288,80 @@ jobs:
                 SELECT
                   to_regnamespace('bluejob') IS NOT NULL AS schema_exists
               `);
-              const targetSchema =
-                schemaExists.rows[0].schema_exists
-                  ? "bluejob"
-                  : "public";
-              if (
-                targetSchema !== "bluejob" &&
-                targetSchema !== "public"
-              ) {
-                throw new Error(
-                  `Unsupported migration schema: ${targetSchema}`
-                );
-              }
 
-              if (targetSchema === "public") {
+              const bluejobSchemaExists =
+                schemaExists.rows[0].schema_exists;
+
+              if (!bluejobSchemaExists) {
                 console.log(
-                  "bluejob schema not found — using public schema for migrations."
+                  "bluejob schema not found — will be created by migration."
                 );
               }
 
-              await client.query(`
-                SET search_path TO ${targetSchema}
-              `);
+              const targetSchema = "bluejob";
 
-              const schemaCheck = await client.query(`
-                SELECT
-                  current_schema() AS current_schema,
-                  current_setting('search_path') AS search_path,
-                  has_schema_privilege(
-                    current_user,
-                    '${targetSchema}',
-                    'USAGE'
-                  ) AS can_use,
-                  has_schema_privilege(
-                    current_user,
-                    '${targetSchema}',
-                    'CREATE'
-                  ) AS can_create
-              `);
-
-              const info = schemaCheck.rows[0];
-
-              console.log(
-                "Current schema:",
-                info.current_schema
-              );
-
-              console.log(
-                "Search path:",
-                info.search_path
-              );
-
-              console.log(
-                "Migration schema:",
-                targetSchema
-              );
-
-              console.log(
-                "USAGE permission:",
-                info.can_use
-              );
-
-              console.log(
-                "CREATE permission:",
-                info.can_create
-              );
-
-              if (!info.can_use || !info.can_create) {
-                throw new Error(
-                  "Database user does not have required access to the migration schema"
-                );
-              }
-
-              console.log("[3] Testing real CREATE permission...");
+              console.log("[3] Testing CREATE SCHEMA + CREATE TABLE permission...");
 
               await client.query("BEGIN");
 
               try {
+                if (!bluejobSchemaExists) {
+                  await client.query("CREATE SCHEMA bluejob");
+                }
+
+                await client.query(`
+                  SET search_path TO ${targetSchema}
+                `);
+
+                const schemaCheck = await client.query(`
+                  SELECT
+                    current_schema() AS current_schema,
+                    current_setting('search_path') AS search_path,
+                    has_schema_privilege(
+                      current_user,
+                      '${targetSchema}',
+                      'USAGE'
+                    ) AS can_use,
+                    has_schema_privilege(
+                      current_user,
+                      '${targetSchema}',
+                      'CREATE'
+                    ) AS can_create
+                `);
+
+                const info = schemaCheck.rows[0];
+
+                console.log(
+                  "Current schema:",
+                  info.current_schema
+                );
+
+                console.log(
+                  "Search path:",
+                  info.search_path
+                );
+
+                console.log(
+                  "Migration schema:",
+                  targetSchema
+                );
+
+                console.log(
+                  "USAGE permission:",
+                  info.can_use
+                );
+
+                console.log(
+                  "CREATE permission:",
+                  info.can_create
+                );
+
+                if (!info.can_use || !info.can_create) {
+                  throw new Error(
+                    "Database user does not have required access to the migration schema"
+                  );
+                }
+
                 await client.query(`
                   CREATE TABLE ${targetSchema}.__bluejob_launch_probe (
                     id BIGINT PRIMARY KEY
