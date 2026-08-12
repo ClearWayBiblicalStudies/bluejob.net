@@ -8,30 +8,13 @@ if (!connectionString) throw new Error("DATABASE_URL is required to run migratio
 const client = new Client({ connectionString, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined });
 await client.connect();
 try {
-  const bluejobSchemaExists = (
-    await client.query("SELECT to_regnamespace('bluejob') IS NOT NULL AS schema_exists")
-  ).rows[0].schema_exists;
-
-  if (!bluejobSchemaExists) {
-    throw new Error(
-      "The 'bluejob' schema does not exist on this PlanetScale branch. " +
-      "Schemas are pre-provisioned by PlanetScale and cannot be created at runtime."
-    );
-  }
-
   const targetSchema = "bluejob";
   const migrationTable = `${targetSchema}.schema_migrations`;
 
-  await client.query("BEGIN");
-  try {
-    await client.query(`SET search_path TO ${targetSchema}`);
-    await client.query(`CREATE TABLE IF NOT EXISTS ${migrationTable} (filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
-  await client.query(`SET search_path TO ${targetSchema}`);
+  await client.query("SET search_path TO bluejob");
+  await client.query(
+    "CREATE TABLE IF NOT EXISTS bluejob.schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+  );
   const currentUser = await client.query("SELECT current_user");
   console.log("Migration current_user:", currentUser.rows[0].current_user);
   const searchPath = await client.query("SHOW search_path");
