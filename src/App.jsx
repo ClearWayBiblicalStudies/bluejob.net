@@ -44,7 +44,7 @@ function Header({ user, setUser }) {
     <button className="menuButton" aria-label="Toggle navigation" onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button>
     <nav className={open ? "mainNav open" : "mainNav"}>
       <a href="/workers" onClick={(e) => { e.preventDefault(); navigate("/workers"); }}>Find workers</a>
-      {user && <a href={user.roles.includes("CONTRACTOR") ? "/company" : "/profile"} onClick={(e) => { e.preventDefault(); navigate(user.roles.includes("CONTRACTOR") ? "/company" : "/profile"); }}>Dashboard</a>}
+      {user && <a href={user.roles.includes("ADMIN") ? "/admin" : user.roles.includes("CONTRACTOR") ? "/company" : "/profile"} onClick={(e) => { e.preventDefault(); navigate(user.roles.includes("ADMIN") ? "/admin" : user.roles.includes("CONTRACTOR") ? "/company" : "/profile"); }}>Dashboard</a>}
     </nav>
     <div className="navActions">
       {user ? <><span className="userName">Hi, {user.displayName}</span><button className="loginButton" onClick={logout}>Log out</button></> : <><a className="loginButton" href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a><a className="primaryButton joinButton" href="/signup" onClick={(e) => { e.preventDefault(); go("/signup"); }}>Join BlueJob</a></>}
@@ -71,10 +71,40 @@ function AuthPage({ mode, setUser }) {
       const data = await api(`/auth/${mode === "signup" ? "register" : "login"}`, { method: "POST", body: mode === "signup" ? { ...form, accountType } : { email: form.email, password: form.password } });
       const user = data.user || { id: data.id, email: data.email, displayName: data.display_name, roles: data.roles || [accountType] };
       setUser(user);
-      go(user.roles.includes("CONTRACTOR") ? "/company" : "/profile");
+      go(user.roles.includes("ADMIN") ? "/admin" : user.roles.includes("CONTRACTOR") ? "/company" : "/profile");
     } catch (caught) { setError(caught.message); }
   }
-  return <main className="formPage"><section className="formCard"><p className="legalEyebrow">BLUEJOB ACCOUNT</p><h1>{mode === "signup" ? "Join BlueJob" : "Welcome back"}</h1><p>{mode === "signup" ? "Create a work identity or company account." : "Log in to manage your BlueJob account."}</p><form onSubmit={submit}>{mode === "signup" && <><label>Name<input required maxLength="120" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><fieldset><legend>Account type</legend><label><input type="radio" checked={accountType === "WORKER"} onChange={() => setAccountType("WORKER")} /> Worker</label><label><input type="radio" checked={accountType === "CONTRACTOR"} onChange={() => setAccountType("CONTRACTOR")} /> Company / contractor</label></fieldset>{accountType === "CONTRACTOR" && <label>Company name<input required maxLength="160" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></label>}</>}<label>Email<input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Password<input required minLength="12" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <p className="formError">{error}</p>}<button className="primaryButton" type="submit">{mode === "signup" ? "Create account" : "Log in"}</button></form><p>{mode === "signup" ? <>Already have an account? <a href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a></> : <>Need an account? <a href="/signup" onClick={(e) => { e.preventDefault(); go("/signup"); }}>Join BlueJob</a></>}</p></section></main>;
+  return <main className="formPage"><section className="formCard"><p className="legalEyebrow">BLUEJOB ACCOUNT</p><h1>{mode === "signup" ? "Join BlueJob" : "Welcome back"}</h1><p>{mode === "signup" ? "Create a work identity or company account." : "Log in to manage your BlueJob account."}</p><form onSubmit={submit}>{mode === "signup" && <><label>Name<input required maxLength="120" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><fieldset><legend>Account type</legend><label><input type="radio" checked={accountType === "WORKER"} onChange={() => setAccountType("WORKER")} /> Worker</label><label><input type="radio" checked={accountType === "CONTRACTOR"} onChange={() => setAccountType("CONTRACTOR")} /> Company / contractor</label></fieldset>{accountType === "CONTRACTOR" && <label>Company name<input required maxLength="160" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></label>}</>}<label>Email<input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Password<input required minLength="12" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <p className="formError">{error}</p>}<button className="primaryButton" type="submit">{mode === "signup" ? "Create account" : "Log in"}</button></form><p>{mode === "signup" ? <>Already have an account? <a href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a></> : <>Forgot your password? <a href="/forgot-password" onClick={(e) => { e.preventDefault(); go("/forgot-password"); }}>Set a new password</a></>}</p></section></main>;
+}
+
+function PasswordReset({ setUser }) {
+  const token = new URLSearchParams(window.location.search).get("token");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  async function submit(event) {
+    event.preventDefault(); setError("");
+    try {
+      if (token) {
+        const data = await api("/auth/password-reset/confirm", { method: "POST", body: { token, password } });
+        setUser(data.user);
+        go(data.user.roles.includes("ADMIN") ? "/admin" : data.user.roles.includes("CONTRACTOR") ? "/company" : "/profile");
+      } else {
+        await api("/auth/password-reset/request", { method: "POST", body: { email } });
+        setMessage("If an account exists, a password setup link has been sent.");
+      }
+    } catch (caught) { setError(caught.message); }
+  }
+  return <main className="formPage"><section className="formCard"><p className="legalEyebrow">BLUEJOB ACCOUNT</p><h1>{token ? "Set your password" : "Reset your password"}</h1><form onSubmit={submit}>{token ? <label>New password<input required minLength="12" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label> : <label>Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>}{error && <p className="formError">{error}</p>}{message && <p className="formMessage">{message}</p>}<button className="primaryButton">{token ? "Set password" : "Email password link"}</button></form></section></main>;
+}
+
+function Admin({ user }) {
+  const [summary, setSummary] = useState(null); const [error, setError] = useState("");
+  useEffect(() => { if (user?.roles.includes("ADMIN")) api("/admin/dashboard").then(setSummary).catch((caught) => setError(caught.message)); }, [user]);
+  if (!user) return <AuthRequired />;
+  if (!user.roles.includes("ADMIN")) return <main className="appPage"><h1>Admin access required</h1><p className="pageIntro">This dashboard is only available to BlueJob administrators.</p></main>;
+  return <main className="appPage"><p className="legalEyebrow">BLUEJOB ADMIN</p><h1>Admin dashboard</h1>{error && <p className="formError">{error}</p>}{summary && <div className="dashboardGrid"><section className="formCard"><h2>Platform users</h2><strong className="profileScore">{summary.users}</strong></section><section className="formCard"><h2>Pending verification</h2><strong className="profileScore">{summary.pendingEvidence}</strong></section><section className="formCard"><h2>Open disputes</h2><strong className="profileScore">{summary.openDisputes}</strong></section></div>}</main>;
 }
 
 function Profile({ user }) {
@@ -117,6 +147,6 @@ export default function App() {
   useEffect(() => { const onPop = () => setPath(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => { api("/me").then(setUser).catch(() => setUser(null)); }, []);
   const workerId = path.match(/^\/workers\/([0-9a-f-]{36})$/i)?.[1];
-  const content = legalPages[path] ? <Legal page={legalPages[path]} /> : path === "/signup" ? <AuthPage mode="signup" setUser={setUser} /> : path === "/login" ? <AuthPage mode="login" setUser={setUser} /> : path === "/profile" ? <Profile user={user} /> : path === "/company" ? <Company user={user} /> : path === "/workers" || workerId ? <Workers user={user} workerId={workerId} /> : <Home user={user} />;
+  const content = legalPages[path] ? <Legal page={legalPages[path]} /> : path === "/signup" ? <AuthPage mode="signup" setUser={setUser} /> : path === "/login" ? <AuthPage mode="login" setUser={setUser} /> : path === "/forgot-password" || path === "/reset-password" ? <PasswordReset setUser={setUser} /> : path === "/admin" ? <Admin user={user} /> : path === "/profile" ? <Profile user={user} /> : path === "/company" ? <Company user={user} /> : path === "/workers" || workerId ? <Workers user={user} workerId={workerId} /> : <Home user={user} />;
   return <div className="app"><Header user={user} setUser={setUser} />{content}<Footer /></div>;
 }
