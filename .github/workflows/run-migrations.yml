@@ -455,14 +455,7 @@ jobs:
             await client.connect();
 
             try {
-              const schemaExists = await client.query(`
-                SELECT
-                  to_regnamespace('bluejob') IS NOT NULL AS schema_exists
-              `);
-              const targetSchema =
-                schemaExists.rows[0].schema_exists
-                  ? "bluejob"
-                  : "public";
+              const targetSchema = "bluejob";
               const migrationTable = await client.query(`
                 SELECT
                   to_regclass(
