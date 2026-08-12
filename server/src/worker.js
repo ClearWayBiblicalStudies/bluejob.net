@@ -35,8 +35,48 @@ async function withDb(env, callback) {
 }
 
 async function passwordHash(password, pepper) {
+  const salt = randomBytes(16).toString("base64url");
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
+  const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 600000 }, key, 256);
+  return `pbkdf2$600000$${salt}$${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function passwordMatches(password, storedHash, pepper) {
+  if (storedHash.startsWith("pbkdf2$")) {
+    const [algorithm, iterations, salt, expected] = storedHash.split("$");
+    if (algorithm !== "pbkdf2" || !/^\d+$/.test(iterations) || !salt || !/^[0-9a-f]{64}$/.test(expected)) return false;
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
+    const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: Number(iterations) }, key, 256);
+    const actual = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return actual === expected;
+  }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${pepper}:${password}`));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === storedHash;
+}
+
+function resetEmailConfigured(env) {
+  return Boolean(env.RESEND_API_KEY && env.PASSWORD_RESET_FROM);
+}
+
+async function sendPasswordResetEmail(env, email, token) {
+  const origin = new URL(env.APP_ORIGIN || "https://bluejob.net");
+  if (origin.protocol !== "https:") throw new Error("Password reset origin must use HTTPS");
+  const resetUrl = new URL("/reset-password", origin);
+  resetUrl.searchParams.set("token", token);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + env.RESEND_API_KEY,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: env.PASSWORD_RESET_FROM,
+      to: email,
+      subject: "Set your BlueJob password",
+      html: `<p>Use this one-time link to set your BlueJob password:</p><p><a href="${resetUrl.href}">Set password</a></p><p>This link expires in one hour.</p>`,
+    }),
+  });
+  if (!response.ok) throw new Error("Password reset email delivery failed");
 }
 
 function body(request) {
@@ -100,7 +140,7 @@ async function auth(request, env, db, path) {
     const input = await body(request);
     const result = await db.query("SELECT * FROM users WHERE email=$1", [input.email?.toLowerCase()]);
     const user = result.rows[0];
-    if (!user || user.password_hash !== await passwordHash(input.password || "", env.PASSWORD_PEPPER || "")) {
+    if (!user || !await passwordMatches(input.password || "", user.password_hash, env.PASSWORD_PEPPER || "")) {
       return json({ error: "Invalid credentials" }, 401);
     }
     const token = randomBytes(32).toString("base64url");
@@ -109,6 +149,62 @@ async function auth(request, env, db, path) {
     return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
       "set-cookie": cookie(token, 604800),
     });
+  }
+  if (path === "/api/auth/password-reset/request" && request.method === "POST") {
+    const email = (await body(request)).email?.trim().toLowerCase();
+    if (!email || !resetEmailConfigured(env)) return json({ ok: true });
+    const result = await db.query("SELECT id FROM users WHERE email=$1", [email]);
+    if (!result.rowCount) return json({ ok: true });
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hash(token);
+    await db.query("DELETE FROM password_reset_tokens WHERE user_id=$1 OR expires_at <= now()", [result.rows[0].id]);
+    await db.query(
+      "INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 hour')",
+      [result.rows[0].id, tokenHash],
+    );
+    try {
+      await sendPasswordResetEmail(env, email, token);
+    } catch (error) {
+      await db.query("DELETE FROM password_reset_tokens WHERE token_hash=$1", [tokenHash]);
+      console.error("password reset delivery failed");
+    }
+    return json({ ok: true });
+  }
+  if (path === "/api/auth/password-reset/confirm" && request.method === "POST") {
+    const input = await body(request);
+    if (!input.token || !input.password || input.password.length < 12) {
+      return json({ error: "A valid reset link and a 12-character password are required" }, 400);
+    }
+    await db.query("BEGIN");
+    try {
+      const reset = await db.query(
+        `UPDATE password_reset_tokens
+            SET used_at=now()
+          WHERE token_hash=$1 AND used_at IS NULL AND expires_at > now()
+        RETURNING user_id`,
+        [hash(input.token)],
+      );
+      if (!reset.rowCount) {
+        await db.query("ROLLBACK");
+        return json({ error: "This password reset link is invalid or expired" }, 400);
+      }
+      const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
+      const user = await db.query(
+        "UPDATE users SET password_hash=$1,force_password_change=false,updated_at=now() WHERE id=$2 RETURNING id,email,display_name,onboarding_path",
+        [password, reset.rows[0].user_id],
+      );
+      await db.query("DELETE FROM sessions WHERE user_id=$1", [user.rows[0].id]);
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.rows[0].id, hash(token)]);
+      await db.query("COMMIT");
+      const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
+      return json({ ok: true, user: { id: user.rows[0].id, email: user.rows[0].email, displayName: user.rows[0].display_name, roles: current?.roles || [], onboardingPath: user.rows[0].onboarding_path } }, 200, {
+        "set-cookie": cookie(token, 604800),
+      });
+    } catch (error) {
+      await db.query("ROLLBACK").catch(() => {});
+      throw error;
+    }
   }
   if (path === "/api/auth/logout" && request.method === "POST") {
     const token = request.headers.get("Cookie")?.match(/(?:^|;\s*)bj_session=([^;]+)/)?.[1];
@@ -349,6 +445,20 @@ async function api(request, env, db, user, path) {
     const denied = requireRole(user, "ADMIN");
     if (denied || !user.mfa_verified_at) return denied || json({ error: "MFA required" }, 403);
     return json((await db.query("SELECT id,user_id,type,status,submitted_at,metadata FROM evidence WHERE status='PENDING' ORDER BY submitted_at")).rows);
+  }
+  if (path === "/api/admin/dashboard" && request.method === "GET") {
+    const denied = requireRole(user, "ADMIN");
+    if (denied) return denied;
+    const [users, pendingEvidence, openDisputes] = await Promise.all([
+      db.query("SELECT count(*)::integer count FROM users"),
+      db.query("SELECT count(*)::integer count FROM evidence WHERE status='PENDING'"),
+      db.query("SELECT count(*)::integer count FROM disputes WHERE status='OPEN'"),
+    ]);
+    return json({
+      users: users.rows[0].count,
+      pendingEvidence: pendingEvidence.rows[0].count,
+      openDisputes: openDisputes.rows[0].count,
+    });
   }
   return json({ error: "Not found" }, 404);
 }
