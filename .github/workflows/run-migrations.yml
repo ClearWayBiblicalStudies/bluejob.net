@@ -192,6 +192,16 @@ jobs:
             "require"
           );
 
+          // Newer versions of pg (used with Node 24) treat sslmode=require
+          // as an alias for sslmode=verify-full, which re-introduces the
+          // PlanetScale DDL restriction. Setting uselibpqcompat=true restores
+          // libpq-compatible require semantics: encrypted but no certificate
+          // verification, and the DDL-capable connection path on PlanetScale.
+          url.searchParams.set(
+            "uselibpqcompat",
+            "true"
+          );
+
           const cleanUrl = url.toString();
 
           console.log(`::add-mask::${cleanUrl}`);
