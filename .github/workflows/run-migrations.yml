@@ -294,6 +294,14 @@ jobs:
                 schemaExists.rows[0].schema_exists
                   ? "bluejob"
                   : "public";
+              if (
+                targetSchema !== "bluejob" &&
+                targetSchema !== "public"
+              ) {
+                throw new Error(
+                  `Unsupported migration schema: ${targetSchema}`
+                );
+              }
 
               if (targetSchema === "public") {
                 console.log(
@@ -489,7 +497,6 @@ jobs:
               // Keep this list aligned with the baseline application tables that
               // must exist after the production bootstrap migrations finish.
               const requiredTables = [
-                "schema_migrations",
                 "users",
                 "jobs"
               ];
