@@ -21,9 +21,13 @@ const cors = (request, response) => {
 
 async function withDb(env, callback) {
   if (!env.HYPERDRIVE?.connectionString) throw new Error("Database binding is not configured");
-  const client = new Client({ connectionString: env.HYPERDRIVE.connectionString });
+  const client = new Client({
+    connectionString: env.HYPERDRIVE.connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
   await client.connect();
   try {
+    await client.query("SET search_path TO bluejob, public");
     return await callback(client);
   } finally {
     await client.end().catch(() => {});
@@ -62,18 +66,32 @@ function requireRole(user, role) {
 async function auth(request, env, db, path) {
   if (path === "/api/auth/register" && request.method === "POST") {
     const input = await body(request);
-    if (!input.email || !input.password || input.password.length < 12 || !input.displayName) {
+    const accountType = input.accountType === "CONTRACTOR" ? "CONTRACTOR" : "WORKER";
+    const displayName = input.displayName?.trim();
+    const companyName = input.companyName?.trim();
+    if (!input.email || !input.password || input.password.length < 12 || !displayName ||
+      displayName.length > 120 || (accountType === "CONTRACTOR" && (!companyName || companyName.length > 160))) {
       return json({ error: "email, displayName, and a 12-character password are required" }, 400);
     }
     const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
     try {
+      await db.query("BEGIN");
       const result = await db.query(
-        "INSERT INTO users(email,password_hash,display_name) VALUES($1,$2,$3) RETURNING id,email,display_name",
-        [input.email.toLowerCase(), password, input.displayName],
+        "INSERT INTO users(email,password_hash,display_name,onboarding_path) VALUES($1,$2,$3,$4) RETURNING id,email,display_name,onboarding_path",
+        [input.email.toLowerCase(), password, displayName, accountType],
       );
-      await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='WORKER'", [result.rows[0].id]);
-      return json(result.rows[0], 201);
+      const user = result.rows[0];
+      await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name=$2", [user.id, accountType]);
+      if (accountType === "CONTRACTOR") {
+        const company = await db.query("INSERT INTO companies(name,created_by) VALUES($1,$2) RETURNING id", [companyName, user.id]);
+        await db.query("INSERT INTO company_memberships(company_id,user_id,role) VALUES($1,$2,'OWNER')", [company.rows[0].id, user.id]);
+      }
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
+      await db.query("COMMIT");
+      return json({ ...user, roles: [accountType] }, 201, { "set-cookie": cookie(token, 604800) });
     } catch (error) {
+      await db.query("ROLLBACK").catch(() => {});
       if (error.code === "23505") return json({ error: "Account already exists" }, 409);
       throw error;
     }
@@ -87,7 +105,8 @@ async function auth(request, env, db, path) {
     }
     const token = randomBytes(32).toString("base64url");
     await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
-    return json({ ok: true, requiresPasswordChange: user.force_password_change }, 200, {
+    const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
+    return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
       "set-cookie": cookie(token, 604800),
     });
   }
@@ -115,7 +134,8 @@ async function api(request, env, db, user, path) {
   if (path === "/api/passport" && request.method === "GET") {
     const result = await db.query("SELECT * FROM work_passports WHERE user_id=$1", [user.id]);
     const scores = await db.query("SELECT score,status,factors,created_at FROM work_score_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20", [user.id]);
-    return json({ passport: result.rows[0] || null, score: scores.rows[0] || { status: "BUILDING" }, history: scores.rows });
+    const history = await db.query("SELECT id,title,details,started_on,ended_on,status,created_at FROM work_history WHERE user_id=$1 ORDER BY started_on DESC NULLS LAST,created_at DESC", [user.id]);
+    return json({ passport: result.rows[0] || null, score: scores.rows[0] || { status: "BUILDING" }, scoreHistory: scores.rows, workHistory: history.rows });
   }
   if (path === "/api/passport" && request.method === "PUT") {
     const input = await body(request);
@@ -127,6 +147,73 @@ async function api(request, env, db, user, path) {
       [user.id, input.trade, JSON.stringify(input.skills || []), input.yearsExperience, input.serviceArea, input.profileSummary],
     );
     return json(result.rows[0]);
+  }
+  if (path === "/api/passport/history" && request.method === "POST") {
+    const input = await body(request);
+    if (!input.title?.trim() || input.title.length > 160 || (input.details && input.details.length > 4000)) {
+      return json({ error: "A work-history title is required" }, 400);
+    }
+    const result = await db.query(
+      "INSERT INTO work_history(user_id,title,details,started_on,ended_on) VALUES($1,$2,$3,$4,$5) RETURNING id,title,details,started_on,ended_on,status,created_at",
+      [user.id, input.title.trim(), input.details?.trim() || null, input.startedOn || null, input.endedOn || null],
+    );
+    return json(result.rows[0], 201);
+  }
+  if (path === "/api/company" && request.method === "GET") {
+    const result = await db.query(
+      "SELECT c.id,c.name,c.slug,cm.role FROM companies c JOIN company_memberships cm ON cm.company_id=c.id WHERE cm.user_id=$1 ORDER BY c.created_at LIMIT 1",
+      [user.id],
+    );
+    return json({ company: result.rows[0] || null });
+  }
+  if (path === "/api/company" && request.method === "PUT") {
+    const denied = requireRole(user, "CONTRACTOR");
+    if (denied) return denied;
+    const input = await body(request);
+    const name = input.name?.trim();
+    if (!name || name.length > 160) return json({ error: "A company name is required" }, 400);
+    const existing = await db.query("SELECT c.id FROM companies c JOIN company_memberships cm ON cm.company_id=c.id WHERE cm.user_id=$1 LIMIT 1", [user.id]);
+    const result = existing.rowCount
+      ? await db.query("UPDATE companies SET name=$1 WHERE id=$2 RETURNING id,name,slug", [name, existing.rows[0].id])
+      : await db.query("INSERT INTO companies(name,created_by) VALUES($1,$2) RETURNING id,name,slug", [name, user.id]);
+    if (!existing.rowCount) await db.query("INSERT INTO company_memberships(company_id,user_id,role) VALUES($1,$2,'OWNER')", [result.rows[0].id, user.id]);
+    return json({ company: result.rows[0] });
+  }
+  if (path === "/api/workers" && request.method === "GET") {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim().slice(0, 100) || "";
+    const trade = url.searchParams.get("trade")?.trim().slice(0, 100) || "";
+    const location = url.searchParams.get("location")?.trim().slice(0, 100) || "";
+    const result = await db.query(
+      `SELECT u.id,u.display_name,p.trade,p.skills,p.years_experience,p.service_area,p.profile_summary,p.verification_status,
+              score.score,ratings.rating,ratings.reliability,COALESCE(history.count,0)::integer work_history_count
+         FROM users u JOIN work_passports p ON p.user_id=u.id
+         LEFT JOIN LATERAL (SELECT score FROM work_score_snapshots WHERE user_id=u.id ORDER BY created_at DESC LIMIT 1) score ON true
+         LEFT JOIN LATERAL (SELECT avg((quality + reliability + communication) / 3.0)::numeric(3,2) rating,avg(reliability)::numeric(3,2) reliability FROM worker_feedback WHERE worker_id=u.id) ratings ON true
+         LEFT JOIN LATERAL (SELECT count(*) FROM work_history WHERE user_id=u.id) history ON true
+        WHERE ($1='' OR u.display_name ILIKE '%' || $1 || '%' OR p.trade ILIKE '%' || $1 || '%' OR p.skills::text ILIKE '%' || $1 || '%')
+          AND ($2='' OR p.trade ILIKE '%' || $2 || '%')
+          AND ($3='' OR p.service_area ILIKE '%' || $3 || '%')
+        ORDER BY p.verification_status='VERIFIED' DESC, score.score DESC NULLS LAST, u.display_name
+        LIMIT 50`,
+      [q, trade, location],
+    );
+    return json({ workers: result.rows });
+  }
+  const workerMatch = path.match(/^\/api\/workers\/([0-9a-f-]{36})$/i);
+  if (workerMatch && request.method === "GET") {
+    const profile = await db.query(
+      `SELECT u.id,u.display_name,p.trade,p.skills,p.years_experience,p.service_area,p.profile_summary,p.verification_status,
+              score.score,ratings.rating,ratings.reliability
+         FROM users u JOIN work_passports p ON p.user_id=u.id
+         LEFT JOIN LATERAL (SELECT score FROM work_score_snapshots WHERE user_id=u.id ORDER BY created_at DESC LIMIT 1) score ON true
+         LEFT JOIN LATERAL (SELECT avg((quality + reliability + communication) / 3.0)::numeric(3,2) rating,avg(reliability)::numeric(3,2) reliability FROM worker_feedback WHERE worker_id=u.id) ratings ON true
+        WHERE u.id=$1`,
+      [workerMatch[1]],
+    );
+    if (!profile.rowCount) return json({ error: "Worker not found" }, 404);
+    const history = await db.query("SELECT id,title,details,started_on,ended_on,status FROM work_history WHERE user_id=$1 ORDER BY started_on DESC NULLS LAST,created_at DESC", [workerMatch[1]]);
+    return json({ worker: profile.rows[0], workHistory: history.rows });
   }
   if (path === "/api/jobs" && request.method === "POST") {
     const denied = requireRole(user, "CONTRACTOR");
