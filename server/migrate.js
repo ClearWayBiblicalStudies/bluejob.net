@@ -13,8 +13,10 @@ try {
   ).rows[0].schema_exists;
 
   if (!bluejobSchemaExists) {
-    console.log("bluejob schema not found; creating it now.");
-    await client.query("CREATE SCHEMA bluejob");
+    throw new Error(
+      "The 'bluejob' schema does not exist on this PlanetScale branch. " +
+      "Schemas are pre-provisioned by PlanetScale and cannot be created at runtime."
+    );
   }
 
   const targetSchema = "bluejob";

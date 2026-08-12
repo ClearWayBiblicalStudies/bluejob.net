@@ -91,7 +91,7 @@ jobs:
           }
 
           console.log("Migration engine: CURRENT");
-          console.log("Target schema: bluejob (auto-created if missing)");
+          console.log("Target schema: bluejob (must already exist on PlanetScale branch)");
           console.log("Legacy unqualified schema_migrations path: NOT DETECTED");
           console.log("Migration engine check: PASS");
           NODE
@@ -220,9 +220,8 @@ jobs:
           console.log("Host:", host);
           console.log("User:", username);
           console.log("Database:", database);
-          console.log("Target schema: bluejob (auto-created if missing)");
+          console.log("Target schema: bluejob (must already exist on PlanetScale branch)");
           console.log("Credential: MASKED");
-          console.log("Connection format: PASS");
           NODE
 
       # ==========================================================
@@ -303,22 +302,19 @@ jobs:
                 schemaExists.rows[0].schema_exists;
 
               if (!bluejobSchemaExists) {
-                console.log(
-                  "bluejob schema not found — will be created by migration."
+                throw new Error(
+                  "The 'bluejob' schema does not exist on this PlanetScale branch. " +
+                  "Schemas are pre-provisioned by PlanetScale and cannot be created at runtime."
                 );
               }
 
               const targetSchema = "bluejob";
 
-              console.log("[3] Testing CREATE SCHEMA + CREATE TABLE permission...");
+              console.log("[3] Testing CREATE TABLE permission...");
 
               await client.query("BEGIN");
 
               try {
-                if (!bluejobSchemaExists) {
-                  await client.query("CREATE SCHEMA bluejob");
-                }
-
                 await client.query(`
                   SET search_path TO ${targetSchema}
                 `);
