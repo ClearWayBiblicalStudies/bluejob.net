@@ -278,12 +278,18 @@ jobs:
                 identity.rows[0].current_database
               );
 
-              console.log("[2] Preparing bluejob schema...");
+              console.log("[2] Validating bluejob schema...");
 
-              await client.query(`
-                CREATE SCHEMA IF NOT EXISTS bluejob
-                AUTHORIZATION CURRENT_USER
+              const schemaExists = await client.query(`
+                SELECT
+                  to_regnamespace('bluejob') IS NOT NULL AS schema_exists
               `);
+
+              if (!schemaExists.rows[0].schema_exists) {
+                throw new Error(
+                  "bluejob schema does not exist. Provision it with an administrative role before running this workflow."
+                );
+              }
 
               await client.query(`
                 SET search_path TO bluejob
