@@ -294,14 +294,6 @@ jobs:
                 schemaExists.rows[0].schema_exists
                   ? "bluejob"
                   : "public";
-              if (
-                targetSchema !== "bluejob" &&
-                targetSchema !== "public"
-              ) {
-                throw new Error(
-                  `Unsupported migration schema: ${targetSchema}`
-                );
-              }
 
               if (targetSchema === "public") {
                 console.log(
@@ -368,7 +360,7 @@ jobs:
 
               try {
                 await client.query(`
-                  CREATE TABLE ${targetSchema}.__bluejob_launch_probe (
+                  CREATE TABLE ${targetSchema}.__migration_launch_probe (
                     id BIGINT PRIMARY KEY
                   )
                 `);

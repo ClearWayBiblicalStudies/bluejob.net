@@ -12,9 +12,6 @@ try {
     await client.query("SELECT to_regnamespace('bluejob') IS NOT NULL AS schema_exists")
   ).rows[0].schema_exists;
   const targetSchema = bluejobSchemaExists ? "bluejob" : "public";
-  if (!["bluejob", "public"].includes(targetSchema)) {
-    throw new Error(`Unsupported migration schema: ${targetSchema}`);
-  }
   const migrationTable = `${targetSchema}.schema_migrations`;
 
   if (!bluejobSchemaExists) {
