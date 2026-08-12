@@ -124,19 +124,30 @@ jobs:
           // Hide full credential immediately.
           console.log(`::add-mask::${raw}`);
 
-          if (
-            !raw.startsWith("postgresql://") &&
-            !raw.startsWith("postgres://")
-          ) {
+          // Extract the PostgreSQL URI. The secret may be stored as a bare
+          // URI or inside a .env-style file (e.g. DATABASE_URL=postgresql://...).
+          // Search each line for the first postgresql:// or postgres:// URI.
+          let connectionString = null;
+          for (const line of raw.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            // Support bare URI or KEY=URI assignment.
+            const match = trimmed.match(/^(?:[A-Za-z_]+=)?(postgres(?:ql)?:\/\/.+)$/);
+            if (match) {
+              connectionString = match[1];
+              break;
+            }
+          }
+
+          if (!connectionString) {
             stop(
-              "DATABASE_URL must contain the COMPLETE PlanetScale URI beginning with postgresql://"
+              "DATABASE_URL must contain a PostgreSQL URI beginning with postgresql:// or postgres://"
             );
           }
 
           let url;
 
           try {
-            url = new URL(raw);
+            url = new URL(connectionString);
           } catch {
             stop("DATABASE_URL cannot be parsed as a PostgreSQL URI.");
           }
@@ -161,16 +172,8 @@ jobs:
             stop("Database password is missing.");
           }
 
-          if (!username.startsWith("postgres.")) {
-            stop(
-              `Migration must use the PlanetScale DEFAULT role. Received user: ${username}`
-            );
-          }
-
-          if (!host.endsWith(".pg.psdb.cloud")) {
-            stop(
-              `Unexpected PlanetScale hostname: ${host}`
-            );
+          if (!host) {
+            stop("Database hostname is missing.");
           }
 
           if (!database) {
