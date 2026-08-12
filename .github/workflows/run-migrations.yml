@@ -35,33 +35,24 @@ jobs:
       - run: npm ci
       - name: Validate database URI
         env:
-          BLUEJOB_DATABASE_SECRET: ${{ secrets.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: |
           node <<'NODE'
-          const fs = require("fs");
-          const secret = process.env.BLUEJOB_DATABASE_SECRET || "";
-          console.log(`::add-mask::${secret}`);
-          const raw = secret.trim();
+          const raw = (process.env.MIGRATION_DATABASE_URL || "").trim();
           const line = raw.split(/\r?\n/).map(line => line.trim()).find(
             line => /^(?:[A-Za-z_][A-Za-z0-9_]*=)?postgres(?:ql)?:\/\//i.test(line)
           );
-          if (!line) throw new Error("DATABASE_URL must contain a PostgreSQL URI.");
+          if (!line) throw new Error("MIGRATION_DATABASE_URL must contain a PostgreSQL URI.");
           const value = line.replace(/^[A-Za-z_][A-Za-z0-9_]*=/, "");
           let url;
-          try { url = new URL(value); } catch { throw new Error("DATABASE_URL is not a valid PostgreSQL URI."); }
+          try { url = new URL(value); } catch { throw new Error("MIGRATION_DATABASE_URL is not a valid PostgreSQL URI."); }
           if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.username || !url.password || !url.hostname || !url.pathname || url.pathname === "/") {
-            throw new Error("DATABASE_URL must contain PostgreSQL credentials, host, and database.");
+            throw new Error("MIGRATION_DATABASE_URL must contain PostgreSQL credentials, host, and database.");
           }
-          url.searchParams.delete("sslrootcert");
-          url.searchParams.set("sslmode", "require");
-          console.log(`::add-mask::${decodeURIComponent(url.password)}`);
-          const cleanUrl = url.toString();
-          console.log(`::add-mask::${cleanUrl}`);
-          fs.appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`);
           NODE
       - name: Authenticate and preflight bluejob
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: |
           node <<'NODE'
           const { Client } = require("pg");
@@ -95,12 +86,12 @@ jobs:
           NODE
       - name: Run migrations
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
           NODE_ENV: production
         run: npm run migrate
       - name: Verify migrated database
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: |
           node <<'NODE'
           const { Client } = require("pg");
