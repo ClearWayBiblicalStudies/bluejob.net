@@ -1,163 +1,122 @@
-import {
-  ArrowRight,
-  BadgeCheck,
-  BriefcaseBusiness,
-  ShieldCheck,
-  Star,
-  Users,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, Menu, ShieldCheck, Users, X } from "lucide-react";
 
 const legalPages = {
-  "/privacy": {
-    title: "Privacy Policy",
-    intro: "This Privacy Policy explains how BlueJob collects, uses, shares, and protects information when you use the BlueJob platform.",
-    sections: [
-      ["Information we collect", "We collect account and contact information, profile details, skills, work history, verification information, uploaded documents and evidence, ratings, BlueJob™ Work Score data, device and log information, and payment information when payments are available through the platform."],
-      ["How we use information", "We use information to operate and improve BlueJob, create and maintain work identities, provide verification and matching features, calculate and display Work Score information, communicate with you, prevent fraud and misuse, and meet legal obligations."],
-      ["Sharing and service providers", "We may share information with other platform users as needed for profiles, jobs, work agreements, ratings, and verification. We also use service providers that help us host, secure, analyze, support, and process payments for the service."],
-      ["Security and retention", "We use reasonable administrative, technical, and organizational measures to protect information. We retain information for as long as needed to provide the service, comply with law, resolve disputes, and enforce agreements."],
-      ["Your choices and rights", "You may access, update, or request deletion of certain account information, subject to legal and operational limits. You may opt out of non-essential marketing communications. Contact us to make a privacy request."],
-      ["Updates and contact", "We may update this policy and will post the revised version here. For questions or requests, contact BlueJob through our Contact page."],
-    ],
-  },
-  "/terms": {
-    title: "Terms of Service",
-    intro: "These Terms of Service govern your use of BlueJob, a platform that helps workers, contractors, subcontractors, and companies connect through work identity, verification, and reputation tools.",
-    sections: [
-      ["Eligibility and accounts", "You must be legally able to form a binding agreement and provide accurate account information. You are responsible for maintaining the confidentiality of your account and for activity under it."],
-      ["Platform role", "BlueJob provides a platform and tools; it is not an employer, staffing agency, contractor, insurer, licensing authority, or guarantor. Workers, contractors, subcontractors, and companies remain independent parties responsible for their own decisions and obligations."],
-      ["Jobs and work agreements", "Users are responsible for evaluating opportunities, negotiating work agreements, obtaining permits or insurance, and complying with applicable law. BlueJob does not guarantee employment, worker quality, payment, licensing, safety, or the outcome of any work."],
-      ["Verification, Work Score, and ratings", "Verification, ratings, and BlueJob™ Work Score information are platform signals based on available information and may change. They are not endorsements, warranties, credit scores, or guarantees. Users must not manipulate ratings, verification, or Work Score data."],
-      ["Payments, fees, and disputes", "If payment features are offered, applicable fees and payment terms will be presented before use. Parties to a job are responsible for their own agreements and disputes. BlueJob may assist with platform records but is not required to resolve disputes."],
-      ["Content and prohibited conduct", "You retain responsibility for documents, evidence, listings, and other content you upload. Do not submit unlawful, misleading, infringing, unsafe, discriminatory, or harmful content; impersonate others; interfere with the service; or misuse another person’s information."],
-      ["Intellectual property, suspension, and termination", "BlueJob and its content, marks, and platform features are protected by law. We may suspend or terminate access for violations, risk, or operational reasons. You may stop using the service at any time, subject to outstanding obligations."],
-      ["Disclaimers, liability, and changes", "The service is provided as available to the extent permitted by law. BlueJob disclaims warranties not expressly stated here and is not liable for indirect, incidental, special, consequential, or punitive damages. We may update these Terms by posting an updated version. Contact us through our Contact page with questions."],
-    ],
-  },
-  "/cookies": {
-    title: "Cookie Policy",
-    intro: "BlueJob uses cookies and similar technologies to keep the platform secure, remember preferences, understand performance, and improve the service.",
-    sections: [
-      ["How cookies are used", "Essential cookies support core functionality and security. Analytics technologies help us understand how visitors use the platform. Where required, we will request consent for non-essential cookies."],
-      ["Your choices", "You can manage cookies through your browser settings. Blocking some cookies may affect features of the BlueJob platform."],
-    ],
-  },
-  "/community-guidelines": {
-    title: "Community Guidelines",
-    intro: "BlueJob is built for professional, trustworthy work connections.",
-    sections: [
-      ["Be accurate and respectful", "Use your real identity, describe experience honestly, and treat every platform participant with respect."],
-      ["Protect trust", "Do not falsify work history, verification evidence, ratings, credentials, or BlueJob™ Work Score-related information. Report suspected fraud, harassment, or unsafe conduct."],
-      ["Keep the platform professional", "Do not post illegal, discriminatory, threatening, sexually explicit, or infringing content, or use BlueJob to solicit conduct unrelated to legitimate work opportunities."],
-    ],
-  },
-  "/contact": {
-    title: "Contact BlueJob",
-    intro: "Questions about BlueJob, privacy, terms, verification, or your account are welcome.",
-    sections: [
-      ["Get in touch", "Use the support contact options available in your BlueJob account. For legal, privacy, or platform questions, send a detailed request through the account support channel so our team can respond appropriately."],
-    ],
-  },
-  "/about": {
-    title: "About BlueJob",
-    intro: "BlueJob helps skilled workers, contractors, subcontractors, and companies build better work connections through verified work history and professional reputation.",
-    sections: [
-      ["Our purpose", "We are building a clearer way to present work identity, completed work, verification, and reputation—so people can make better-informed work decisions."],
-      ["BlueJob™ Work Score", "Work Score is a BlueJob product feature designed to present work-reputation signals consistently. It does not replace independent judgment or professional due diligence."],
-    ],
-  },
+  "/privacy": ["Privacy Policy", "BlueJob collects account, profile, work-history, verification, and reputation information needed to operate the platform. You can request access to or correction of your account information through account support."],
+  "/terms": ["Terms of Service", "BlueJob provides work-identity and discovery tools. Workers and companies remain responsible for their own work decisions, agreements, permits, insurance, and legal obligations."],
+  "/cookies": ["Cookie Policy", "BlueJob uses essential cookies to keep accounts secure and preserve authenticated sessions. Blocking essential cookies can prevent access to the application."],
+  "/community-guidelines": ["Community Guidelines", "Use accurate professional information, respect other users, and do not falsify work history, ratings, verification evidence, or Work Score information."],
+  "/contact": ["Contact BlueJob", "Use the support options in your BlueJob account for questions about your account, privacy, verification, or the platform."],
+  "/about": ["About BlueJob", "BlueJob helps workers, contractors, subcontractors, and companies build better work connections through work history and professional reputation."],
 };
 
-function BrandMark({ compact = false }) {
-  return (
-    <span className={`brandMark${compact ? " compact" : ""}`}>
-      <img src="/bluejob-logo.png" alt="BlueJob" />
-    </span>
-  );
+async function api(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
+    ...options,
+    credentials: "include",
+    headers: { "content-type": "application/json", ...options.headers },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+function go(path) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function Brand() {
+  return <a className="brand" href="/" onClick={(event) => { event.preventDefault(); go("/"); }}><span className="brandMark"><img src="/bluejob-logo.png" alt="BlueJob" /></span></a>;
+}
+
+function Header({ user, setUser }) {
+  const [open, setOpen] = useState(false);
+  async function logout() {
+    await api("/auth/logout", { method: "POST" }).catch(() => {});
+    setUser(null);
+    go("/");
+  }
+  const navigate = (path) => { setOpen(false); go(path); };
+  return <header className="navbar">
+    <Brand />
+    <button className="menuButton" aria-label="Toggle navigation" onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button>
+    <nav className={open ? "mainNav open" : "mainNav"}>
+      <a href="/workers" onClick={(e) => { e.preventDefault(); navigate("/workers"); }}>Find workers</a>
+      {user && <a href={user.roles.includes("CONTRACTOR") ? "/company" : "/profile"} onClick={(e) => { e.preventDefault(); navigate(user.roles.includes("CONTRACTOR") ? "/company" : "/profile"); }}>Dashboard</a>}
+    </nav>
+    <div className="navActions">
+      {user ? <><span className="userName">Hi, {user.displayName}</span><button className="loginButton" onClick={logout}>Log out</button></> : <><a className="loginButton" href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a><a className="primaryButton joinButton" href="/signup" onClick={(e) => { e.preventDefault(); go("/signup"); }}>Join BlueJob</a></>}
+    </div>
+  </header>;
 }
 
 function Footer() {
-  return (
-    <footer className="footer">
-      <div className="footerInner">
-        <div className="footerBrand">
-          <BrandMark compact />
-          <p>© 2026 BlueJob. All rights reserved.</p>
-        </div>
-        <nav className="footerLinks" aria-label="Legal and company links">
-          <a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a>
-          <a href="/cookies">Cookie Policy</a><a href="/community-guidelines">Community Guidelines</a>
-          <a href="/contact">Contact</a><a href="/about">About BlueJob</a>
-        </nav>
-        <p className="trademark">BlueJob™ and Work Score are trademarks/brand identifiers of BlueJob. All other trademarks belong to their respective owners.</p>
-      </div>
-    </footer>
-  );
+  return <footer className="footer"><div className="footerInner"><div><Brand /><p>© 2026 BlueJob. All rights reserved.</p></div><nav className="footerLinks">{Object.entries(legalPages).map(([path, [title]]) => <a href={path} key={path} onClick={(e) => { e.preventDefault(); go(path); }}>{title}</a>)}</nav></div></footer>;
 }
 
-function LegalPage({ page }) {
-  return (
-    <div className="app">
-      <header className="navbar">
-        <a className="brand" href="/" aria-label="BlueJob home"><BrandMark /></a>
-        <a className="backHome" href="/">Back to BlueJob</a>
-      </header>
-      <main className="legalPage">
-        <p className="legalEyebrow">BlueJob™</p>
-        <h1>{page.title}</h1>
-        <p className="legalIntro">{page.intro}</p>
-        {page.sections.map(([heading, text]) => <section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}
-      </main>
-      <Footer />
-    </div>
-  );
+function Home({ user }) {
+  const profilePath = user ? (user.roles.includes("CONTRACTOR") ? "/company" : "/profile") : "/signup";
+  return <main><section className="hero"><div className="heroContent"><div className="eyebrow"><BadgeCheck size={17} />The verified network for real work</div><h1>Your work should<span> speak for itself.</span></h1><p className="heroDescription">BlueJob connects skilled workers, contractors and companies through verified work history, reputation and opportunity.</p><div className="heroButtons"><a className="primaryButton large" href={profilePath} onClick={(e) => { e.preventDefault(); go(profilePath); }}>Build your profile <ArrowRight size={18} /></a><a className="secondaryButton large" href="/workers" onClick={(e) => { e.preventDefault(); go("/workers"); }}>Find workers</a></div><div className="trustLine"><ShieldCheck size={19} />Verified work. Verified people. Real reputation.</div></div><div className="scoreCard"><div className="scoreHeader"><div><h3>BlueJob Work Score</h3></div><div className="verified"><BadgeCheck size={17} />Evidence based</div></div><p className="scoreMessage">Your Work Score is built from verified work and ratings—not a landing-page promise.</p></div></section><section className="features"><div className="feature"><Users /><h3>Build Your Work Identity</h3><p>Create a searchable profile with your trade, skills, experience, and work history.</p></div><div className="feature"><BriefcaseBusiness /><h3>Find Proven Workers</h3><p>Companies can search real worker profiles by trade, skill, and service area.</p></div><div className="feature"><BadgeCheck /><h3>Earn Your Work Score</h3><p>Completed-work feedback contributes to a portable professional reputation.</p></div></section></main>;
 }
 
-function LandingPage() {
-  return (
-    <div className="app">
-      <header className="navbar">
-        <a className="brand" href="/" aria-label="BlueJob home"><BrandMark /></a>
-        <nav><a href="#workers">Workers</a><a href="#companies">Companies</a><a href="#workscore">Work Score</a></nav>
-        <div className="navActions">
-          <a className="loginButton" href="#workers">Log in</a>
-          <a className="primaryButton joinButton" href="#workers">Join BlueJob</a>
-        </div>
-      </header>
-      <main>
-        <section className="hero">
-          <div className="heroContent">
-            <div className="eyebrow"><BadgeCheck size={17} />The verified network for real work</div>
-            <h1>Your work should<span> speak for itself.</span></h1>
-            <p className="heroDescription">BlueJob connects skilled workers, contractors and companies through verified work history, reputation and opportunity.</p>
-            <div className="heroButtons">
-              <a className="primaryButton large" href="#workers">Build your profile<ArrowRight size={18} /></a>
-              <a className="secondaryButton large" href="#companies">Find workers</a>
-            </div>
-            <div className="trustLine"><ShieldCheck size={19} />Verified work. Verified people. Real reputation.</div>
-          </div>
-          <div className="scoreCard" id="workscore">
-            <div className="scoreHeader">
-              <div><BrandMark compact /><h3>Work Score</h3></div>
-              <div className="verified"><BadgeCheck size={17} />Verified</div>
-            </div>
-            <div className="score">842</div><div className="scoreLabel">EXCELLENT WORK REPUTATION</div>
-            <div className="scoreBar"><div className="scoreProgress" /></div>
-            <div className="scoreStats"><div><strong>48</strong><span>Verified Jobs</span></div><div><strong>4.9</strong><span>Work Rating</span></div><div><strong>97%</strong><span>Reliability</span></div></div>
-          </div>
-        </section>
-        <section className="features">
-          <div className="feature" id="workers"><div className="iconBox"><Users /></div><p className="productLabel">BlueJob Work Identity</p><h3>Build Your Work Identity</h3><p>Skills, experience, completed jobs and verified performance become part of one professional work profile.</p></div>
-          <div className="feature" id="companies"><div className="iconBox"><BriefcaseBusiness /></div><h3>Find Proven Workers</h3><p>Companies can discover workers based on actual experience, reliability and verified work history.</p></div>
-          <div className="feature"><div className="iconBox"><Star /></div><div className="featureBrand"><BrandMark compact /><span>Work Score</span></div><h3>Earn Your Work Score</h3><p>Build a portable reputation that gets stronger every time verified work is completed.</p></div>
-        </section>
-      </main>
-      <Footer />
-    </div>
-  );
+function AuthPage({ mode, setUser }) {
+  const [accountType, setAccountType] = useState("WORKER");
+  const [form, setForm] = useState({ displayName: "", email: "", password: "", companyName: "" });
+  const [error, setError] = useState("");
+  async function submit(event) {
+    event.preventDefault(); setError("");
+    try {
+      const data = await api(`/auth/${mode === "signup" ? "register" : "login"}`, { method: "POST", body: mode === "signup" ? { ...form, accountType } : { email: form.email, password: form.password } });
+      const user = data.user || { id: data.id, email: data.email, displayName: data.display_name, roles: data.roles || [accountType] };
+      setUser(user);
+      go(user.roles.includes("CONTRACTOR") ? "/company" : "/profile");
+    } catch (caught) { setError(caught.message); }
+  }
+  return <main className="formPage"><section className="formCard"><p className="legalEyebrow">BLUEJOB ACCOUNT</p><h1>{mode === "signup" ? "Join BlueJob" : "Welcome back"}</h1><p>{mode === "signup" ? "Create a work identity or company account." : "Log in to manage your BlueJob account."}</p><form onSubmit={submit}>{mode === "signup" && <><label>Name<input required maxLength="120" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><fieldset><legend>Account type</legend><label><input type="radio" checked={accountType === "WORKER"} onChange={() => setAccountType("WORKER")} /> Worker</label><label><input type="radio" checked={accountType === "CONTRACTOR"} onChange={() => setAccountType("CONTRACTOR")} /> Company / contractor</label></fieldset>{accountType === "CONTRACTOR" && <label>Company name<input required maxLength="160" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></label>}</>}<label>Email<input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Password<input required minLength="12" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <p className="formError">{error}</p>}<button className="primaryButton" type="submit">{mode === "signup" ? "Create account" : "Log in"}</button></form><p>{mode === "signup" ? <>Already have an account? <a href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a></> : <>Need an account? <a href="/signup" onClick={(e) => { e.preventDefault(); go("/signup"); }}>Join BlueJob</a></>}</p></section></main>;
 }
+
+function Profile({ user }) {
+  const [profile, setProfile] = useState({ trade: "", skills: "", yearsExperience: "", serviceArea: "", profileSummary: "" });
+  const [history, setHistory] = useState({ title: "", details: "", startedOn: "", endedOn: "" });
+  const [items, setItems] = useState([]);
+  const [score, setScore] = useState(null);
+  const [message, setMessage] = useState("");
+  useEffect(() => { api("/passport").then((data) => { const p = data.passport || {}; setProfile({ trade: p.trade || "", skills: (p.skills || []).join(", "), yearsExperience: p.years_experience || "", serviceArea: p.service_area || "", profileSummary: p.profile_summary || "" }); setItems(data.workHistory || []); setScore(data.score); }).catch((e) => setMessage(e.message)); }, []);
+  async function save(event) { event.preventDefault(); try { await api("/passport", { method: "PUT", body: { ...profile, skills: profile.skills.split(",").map((skill) => skill.trim()).filter(Boolean), yearsExperience: Number(profile.yearsExperience) || null } }); setMessage("Profile saved."); } catch (e) { setMessage(e.message); } }
+  async function addHistory(event) { event.preventDefault(); try { const item = await api("/passport/history", { method: "POST", body: history }); setItems([item, ...items]); setHistory({ title: "", details: "", startedOn: "", endedOn: "" }); setMessage("Work history added."); } catch (e) { setMessage(e.message); } }
+  if (!user) return <AuthRequired />;
+  return <main className="appPage"><p className="legalEyebrow">WORKER PROFILE</p><h1>Build your work identity</h1><p className="pageIntro">Your profile is saved to BlueJob and can be found by companies.</p>{message && <p className="formMessage">{message}</p>}<div className="dashboardGrid"><form className="formCard" onSubmit={save}><h2>Professional profile</h2><label>Trade<input value={profile.trade} onChange={(e) => setProfile({ ...profile, trade: e.target.value })} /></label><label>Skills (comma separated)<input value={profile.skills} onChange={(e) => setProfile({ ...profile, skills: e.target.value })} /></label><label>Service area<input value={profile.serviceArea} onChange={(e) => setProfile({ ...profile, serviceArea: e.target.value })} /></label><label>Years of experience<input min="0" type="number" value={profile.yearsExperience} onChange={(e) => setProfile({ ...profile, yearsExperience: e.target.value })} /></label><label>About your work<textarea value={profile.profileSummary} onChange={(e) => setProfile({ ...profile, profileSummary: e.target.value })} /></label><button className="primaryButton">Save profile</button></form><aside className="scoreCard"><h2>Work Score</h2><strong className="profileScore">{score?.score ?? "—"}</strong><p>{score?.status === "VERIFIED" ? "Verified from completed-work feedback." : "Your score will build as verified feedback becomes available."}</p></aside></div><section className="historySection"><h2>Work history</h2><form className="historyForm" onSubmit={addHistory}><label>Role or project<input required value={history.title} onChange={(e) => setHistory({ ...history, title: e.target.value })} /></label><label>Details<textarea value={history.details} onChange={(e) => setHistory({ ...history, details: e.target.value })} /></label><label>Start<input type="date" value={history.startedOn} onChange={(e) => setHistory({ ...history, startedOn: e.target.value })} /></label><label>End<input type="date" value={history.endedOn} onChange={(e) => setHistory({ ...history, endedOn: e.target.value })} /></label><button className="secondaryButton">Add history</button></form>{items.map((item) => <article className="historyItem" key={item.id}><strong>{item.title}</strong><p>{item.details}</p><span>{item.started_on || "Date not added"} – {item.ended_on || "Present"} · {item.status}</span></article>)}</section></main>;
+}
+
+function Workers({ user, workerId }) {
+  const [query, setQuery] = useState({ q: "", trade: "", location: "" }); const [workers, setWorkers] = useState([]); const [selected, setSelected] = useState(null); const [error, setError] = useState("");
+  useEffect(() => { if (user && !workerId) search(); if (user && workerId) api(`/workers/${workerId}`).then(setSelected).catch((e) => setError(e.message)); }, [user, workerId]);
+  async function search(event) { event?.preventDefault(); try { const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value)); setWorkers((await api(`/workers?${params}`)).workers); } catch (e) { setError(e.message); } }
+  if (!user) return <AuthRequired />;
+  if (workerId) return <main className="appPage">{error ? <p className="formError">{error}</p> : selected && <><a href="/workers" onClick={(e) => { e.preventDefault(); go("/workers"); }}>← Back to directory</a><p className="legalEyebrow">WORKER PROFILE</p><h1>{selected.worker.display_name}</h1><p className="pageIntro">{selected.worker.trade} · {selected.worker.service_area || "Service area not listed"}</p><div className="dashboardGrid"><section className="formCard"><h2>Professional information</h2><p>{selected.worker.profile_summary || "No summary provided."}</p><p><strong>Skills:</strong> {(selected.worker.skills || []).join(", ") || "Not listed"}</p><p><strong>Experience:</strong> {selected.worker.years_experience ?? "Not listed"} years</p><p><strong>Verification:</strong> {selected.worker.verification_status}</p></section><aside className="scoreCard"><h2>Work Score</h2><strong className="profileScore">{selected.worker.score ?? "—"}</strong><p>Rating: {selected.worker.rating ?? "Not yet rated"} · Reliability: {selected.worker.reliability ?? "Not yet rated"}</p></aside></div><section className="historySection"><h2>Work history</h2>{selected.workHistory.map((item) => <article className="historyItem" key={item.id}><strong>{item.title}</strong><p>{item.details}</p><span>{item.started_on || "Date not added"} – {item.ended_on || "Present"} · {item.status}</span></article>)}</section></>}</main>;
+  return <main className="appPage"><p className="legalEyebrow">WORKER DIRECTORY</p><h1>Find proven workers</h1><form className="searchForm" onSubmit={search}><input placeholder="Name, trade, or skill" value={query.q} onChange={(e) => setQuery({ ...query, q: e.target.value })} /><input placeholder="Trade" value={query.trade} onChange={(e) => setQuery({ ...query, trade: e.target.value })} /><input placeholder="Location" value={query.location} onChange={(e) => setQuery({ ...query, location: e.target.value })} /><button className="primaryButton">Search</button></form>{error && <p className="formError">{error}</p>}<div className="workerGrid">{workers.map((worker) => <a className="workerCard" href={`/workers/${worker.id}`} key={worker.id} onClick={(e) => { e.preventDefault(); go(`/workers/${worker.id}`); }}><h2>{worker.display_name}</h2><p>{worker.trade || "Trade not listed"} · {worker.service_area || "Location not listed"}</p><p>{(worker.skills || []).join(" · ")}</p><span>{worker.verification_status} · Score {worker.score ?? "building"} · {worker.work_history_count} work-history entries</span></a>)}</div>{!workers.length && <p className="pageIntro">No worker profiles match yet.</p>}</main>;
+}
+
+function Company({ user }) {
+  const [name, setName] = useState(""); const [message, setMessage] = useState("");
+  useEffect(() => { if (user) api("/company").then((data) => setName(data.company?.name || "")).catch((e) => setMessage(e.message)); }, [user]);
+  if (!user) return <AuthRequired />;
+  if (!user.roles.includes("CONTRACTOR")) return <main className="appPage"><h1>Company dashboard</h1><p className="pageIntro">This dashboard is available to company and contractor accounts.</p></main>;
+  async function save(event) { event.preventDefault(); try { const data = await api("/company", { method: "PUT", body: { name } }); setName(data.company.name); setMessage("Company profile saved."); } catch (e) { setMessage(e.message); } }
+  return <main className="appPage"><p className="legalEyebrow">COMPANY / CONTRACTOR</p><h1>Company dashboard</h1><p className="pageIntro">Maintain your company profile and search the BlueJob worker directory.</p><form className="formCard" onSubmit={save}><label>Company name<input required value={name} onChange={(e) => setName(e.target.value)} /></label><button className="primaryButton">Save company</button>{message && <p className="formMessage">{message}</p>}</form><a className="primaryButton" href="/workers" onClick={(e) => { e.preventDefault(); go("/workers"); }}>Find workers <ArrowRight size={18} /></a></main>;
+}
+
+function AuthRequired() { return <main className="formPage"><section className="formCard"><h1>Log in to continue</h1><p>BlueJob profiles and the worker directory are available to authenticated accounts.</p><a className="primaryButton" href="/login" onClick={(e) => { e.preventDefault(); go("/login"); }}>Log in</a></section></main>; }
+
+function Legal({ page }) { return <main className="legalPage"><p className="legalEyebrow">BLUEJOB</p><h1>{page[0]}</h1><p className="legalIntro">{page[1]}</p></main>; }
 
 export default function App() {
-  const page = legalPages[window.location.pathname];
-  return page ? <LegalPage page={page} /> : <LandingPage />;
+  const [path, setPath] = useState(window.location.pathname); const [user, setUser] = useState(null);
+  useEffect(() => { const onPop = () => setPath(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  useEffect(() => { api("/me").then(setUser).catch(() => setUser(null)); }, []);
+  const workerId = path.match(/^\/workers\/([0-9a-f-]{36})$/i)?.[1];
+  const content = legalPages[path] ? <Legal page={legalPages[path]} /> : path === "/signup" ? <AuthPage mode="signup" setUser={setUser} /> : path === "/login" ? <AuthPage mode="login" setUser={setUser} /> : path === "/profile" ? <Profile user={user} /> : path === "/company" ? <Company user={user} /> : path === "/workers" || workerId ? <Workers user={user} workerId={workerId} /> : <Home user={user} />;
+  return <div className="app"><Header user={user} setUser={setUser} />{content}<Footer /></div>;
 }
