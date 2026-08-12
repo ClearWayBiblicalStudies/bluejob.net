@@ -147,6 +147,8 @@ jobs:
           const password =
             decodeURIComponent(url.password || "");
 
+          console.log(`::add-mask::${password}`);
+
           const host = url.hostname || "";
           const database =
             (url.pathname || "").replace(/^\//, "");
@@ -367,6 +369,7 @@ jobs:
               }
 
               process.exitCode = 1;
+              throw error;
             } finally {
               await client.end();
             }
@@ -465,7 +468,9 @@ jobs:
                   .join(", ")
               );
 
-              if (tables.rows.length <= 1) {
+              // schema_migrations is the one tracking table; we require at least one actual app table beyond it.
+              const minimumExpectedBluejobTables = 2;
+              if (tables.rows.length < minimumExpectedBluejobTables) {
                 throw new Error(
                   "Migration completed but expected BlueJob application tables were not found"
                 );
