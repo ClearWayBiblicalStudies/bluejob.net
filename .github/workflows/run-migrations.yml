@@ -91,8 +91,9 @@ jobs:
           }
 
           console.log("Migration engine: CURRENT");
-          console.log("Target schema: bluejob");
-          console.log("Old public-schema migration path: NOT DETECTED");
+          console.log("Preferred schema: bluejob");
+          console.log("Fallback schema: public");
+          console.log("Legacy unqualified schema_migrations path: NOT DETECTED");
           console.log("Migration engine check: PASS");
           NODE
 
@@ -210,7 +211,8 @@ jobs:
           console.log("Host:", host);
           console.log("User:", username);
           console.log("Database:", database);
-          console.log("Target schema: bluejob");
+          console.log("Preferred schema: bluejob");
+          console.log("Fallback schema: public");
           console.log("Credential: MASKED");
           console.log("Connection format: PASS");
           NODE
@@ -282,47 +284,25 @@ jobs:
                 identity.rows[0].current_database
               );
 
-              console.log("[2] Validating bluejob schema...");
+              console.log("[2] Determining migration schema...");
 
               const schemaExists = await client.query(`
                 SELECT
                   to_regnamespace('bluejob') IS NOT NULL AS schema_exists
               `);
+              const targetSchema =
+                schemaExists.rows[0].schema_exists
+                  ? "bluejob"
+                  : "public";
 
-              if (!schemaExists.rows[0].schema_exists) {
-                console.log("bluejob schema not found — creating it now...");
-                try {
-                  await client.query(`CREATE SCHEMA IF NOT EXISTS bluejob`);
-                  console.log("bluejob schema created.");
-                } catch (createError) {
-                  if (createError.code === "42501") {
-                    // The database user lacks CREATE privilege on the database.
-                    // This is expected on PlanetScale when the schema is pre-created
-                    // by the provider. Re-check whether the schema now exists.
-                    console.log(
-                      "CREATE SCHEMA returned 42501 (permission denied) — " +
-                      "re-checking whether bluejob schema was pre-created..."
-                    );
-                    const recheck = await client.query(`
-                      SELECT to_regnamespace('bluejob') IS NOT NULL AS schema_exists
-                    `);
-                    if (!recheck.rows[0].schema_exists) {
-                      throw new Error(
-                        "bluejob schema does not exist and the database user " +
-                        "lacks permission to create it (error 42501). " +
-                        "Grant CREATE on database to the migration user, " +
-                        "or pre-create the bluejob schema manually."
-                      );
-                    }
-                    console.log("bluejob schema exists (pre-created by provider).");
-                  } else {
-                    throw createError;
-                  }
-                }
+              if (targetSchema === "public") {
+                console.log(
+                  "bluejob schema not found — using public schema for migrations."
+                );
               }
 
               await client.query(`
-                SET search_path TO bluejob
+                SET search_path TO ${targetSchema}
               `);
 
               const schemaCheck = await client.query(`
@@ -331,12 +311,12 @@ jobs:
                   current_setting('search_path') AS search_path,
                   has_schema_privilege(
                     current_user,
-                    'bluejob',
+                    '${targetSchema}',
                     'USAGE'
                   ) AS can_use,
                   has_schema_privilege(
                     current_user,
-                    'bluejob',
+                    '${targetSchema}',
                     'CREATE'
                   ) AS can_create
               `);
@@ -354,6 +334,11 @@ jobs:
               );
 
               console.log(
+                "Migration schema:",
+                targetSchema
+              );
+
+              console.log(
                 "USAGE permission:",
                 info.can_use
               );
@@ -365,7 +350,7 @@ jobs:
 
               if (!info.can_use || !info.can_create) {
                 throw new Error(
-                  "Database user does not own/have required access to bluejob schema"
+                  "Database user does not have required access to the migration schema"
                 );
               }
 
@@ -375,7 +360,7 @@ jobs:
 
               try {
                 await client.query(`
-                  CREATE TABLE bluejob.__bluejob_launch_probe (
+                  CREATE TABLE ${targetSchema}.__bluejob_launch_probe (
                     id BIGINT PRIMARY KEY
                   )
                 `);
@@ -388,7 +373,7 @@ jobs:
 
               console.log("");
               console.log("✅ PLANETSCALE AUTHENTICATION PASSED");
-              console.log("✅ BLUEJOB SCHEMA ACCESS PASSED");
+              console.log("✅ MIGRATION SCHEMA ACCESS PASSED");
               console.log("✅ DATABASE CREATE TEST PASSED");
               console.log("");
               console.log("DATABASE IS CLEARED FOR MIGRATION");
@@ -467,30 +452,51 @@ jobs:
             await client.connect();
 
             try {
-              const migrationTable = await client.query(`
+              const bluejobMigrationTable = await client.query(`
                 SELECT
                   to_regclass(
                     'bluejob.schema_migrations'
                   ) AS migration_table
               `);
+              const targetSchema =
+                bluejobMigrationTable.rows[0].migration_table
+                  ? "bluejob"
+                  : "public";
+              const migrationTable = await client.query(`
+                SELECT
+                  to_regclass(
+                    '${targetSchema}.schema_migrations'
+                  ) AS migration_table
+              `);
 
               if (!migrationTable.rows[0].migration_table) {
                 throw new Error(
-                  "bluejob.schema_migrations does not exist"
+                  `${targetSchema}.schema_migrations does not exist`
                 );
               }
 
               const migrations = await client.query(`
                 SELECT COUNT(*)::integer AS count
-                FROM bluejob.schema_migrations
+                FROM ${targetSchema}.schema_migrations
               `);
 
               const tables = await client.query(`
                 SELECT tablename
                 FROM pg_tables
-                WHERE schemaname = 'bluejob'
+                WHERE schemaname = '${targetSchema}'
                 ORDER BY tablename
               `);
+              const tableNames =
+                tables.rows.map(row => row.tablename);
+              const requiredTables = [
+                "schema_migrations",
+                "users",
+                "jobs"
+              ];
+              const missingTables =
+                requiredTables.filter(
+                  table => !tableNames.includes(table)
+                );
 
               console.log("");
               console.log("==========================================");
@@ -503,17 +509,19 @@ jobs:
               );
 
               console.log(
-                "BlueJob tables:",
-                tables.rows
-                  .map(row => row.tablename)
-                  .join(", ")
+                "Migration schema:",
+                targetSchema
               );
 
-              // schema_migrations is the one tracking table; we require at least one actual app table beyond it.
-              const minimumExpectedBluejobTables = 2;
-              if (tables.rows.length < minimumExpectedBluejobTables) {
+              console.log(
+                "Migration schema tables:",
+                tableNames.join(", ")
+              );
+
+              if (missingTables.length > 0) {
                 throw new Error(
-                  "Migration completed but expected BlueJob application tables were not found"
+                  "Migration completed but expected tables were not found: " +
+                  missingTables.join(", ")
                 );
               }
 
