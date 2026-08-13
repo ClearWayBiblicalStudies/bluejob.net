@@ -471,9 +471,13 @@ export default {
     if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
       return cors(request, await withDb(env, async (db) => {
-        if ((path === "/healthz" || path === "/api/readyz") && request.method === "GET") {
+        if (path === "/healthz" && request.method === "GET") {
           await db.query("SELECT 1");
           return json({ ok: true, database: "connected" });
+        }
+        if (path === "/api/readyz" && request.method === "GET") {
+          await db.query("SELECT 1");
+          return json({ ok: true, database: "ready" });
         }
         const authResponse = await auth(request, env, db, path);
         if (authResponse) return authResponse;
