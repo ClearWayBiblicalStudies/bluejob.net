@@ -7,7 +7,7 @@ const cookieName = 'bluejob_access';
 export function signUser(user) {
   return jwt.sign({ sub: user.id, role: user.role, organizationId: user.organization_id || null }, process.env.JWT_SECRET, { expiresIn: '8h', jwtid: crypto.randomUUID() });
 }
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const cookies = Object.fromEntries(String(req.headers.cookie || '').split(';').filter(Boolean).map((part) => {
     const [key, ...value] = part.trim().split('=');
     return [key, decodeURIComponent(value.join('='))];
@@ -20,13 +20,14 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   if (!payload.jti) return res.status(401).json({ error: 'Authentication required' });
-  pool.query('SELECT 1 FROM revoked_tokens WHERE jti=$1 AND expires_at > now()', [payload.jti])
-    .then(({ rows }) => {
-      if (rows[0]) return res.status(401).json({ error: 'Authentication required' });
-      req.user = payload;
-      next();
-    })
-    .catch(() => res.status(401).json({ error: 'Authentication required' }));
+  try {
+    const { rows } = await pool.query('SELECT 1 FROM revoked_tokens WHERE jti=$1 AND expires_at > now()', [payload.jti]);
+    if (rows[0]) return res.status(401).json({ error: 'Authentication required' });
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Authentication required' });
+  }
 }
 export function requireRole(...roles) {
   return (req, res, next) => roles.includes(req.user?.role) ? next() : res.status(403).json({ error: 'Forbidden' });

@@ -19,5 +19,5 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eligible_matches integer NOT NULL DEFA
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS response_signal text NOT NULL DEFAULT 'INSUFFICIENT_DATA';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_path text;
 
-CREATE TABLE IF NOT EXISTS revoked_tokens (jti uuid PRIMARY KEY, expires_at timestamptz NOT NULL);
+CREATE TABLE IF NOT EXISTS revoked_tokens (jti text PRIMARY KEY, expires_at timestamptz NOT NULL);
 CREATE INDEX IF NOT EXISTS revoked_tokens_expires_idx ON revoked_tokens(expires_at);
