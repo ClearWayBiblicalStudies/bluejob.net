@@ -104,7 +104,7 @@ function requireRole(user, role) {
 }
 
 async function auth(request, env, db, path) {
-  if ((path === "/api/auth/register" || path === "/api/auth/signup") && request.method === "POST") {
+  if (["/api/auth/register", "/api/auth/signup"].includes(path) && request.method === "POST") {
     const input = await body(request);
     const accountType = input.accountType === "CONTRACTOR" ? "CONTRACTOR" : "WORKER";
     const displayName = input.displayName?.trim();
@@ -150,7 +150,7 @@ async function auth(request, env, db, path) {
       "set-cookie": cookie(token, 604800),
     });
   }
-  if ((path === "/api/auth/password-reset/request" || path === "/api/auth/forgot-password") && request.method === "POST") {
+  if (["/api/auth/password-reset/request", "/api/auth/forgot-password"].includes(path) && request.method === "POST") {
     const email = (await body(request)).email?.trim().toLowerCase();
     if (!email || !resetEmailConfigured(env)) return json({ ok: true });
     const result = await db.query("SELECT id FROM users WHERE email=$1", [email]);
@@ -170,7 +170,7 @@ async function auth(request, env, db, path) {
     }
     return json({ ok: true });
   }
-  if ((path === "/api/auth/password-reset/confirm" || path === "/api/auth/reset-password") && request.method === "POST") {
+  if (["/api/auth/password-reset/confirm", "/api/auth/reset-password"].includes(path) && request.method === "POST") {
     const input = await body(request);
     if (!input.token || !input.password || input.password.length < 12) {
       return json({ error: "A valid reset link and a 12-character password are required" }, 400);
@@ -468,21 +468,17 @@ export default {
     if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
     const url = new URL(request.url);
     const path = url.pathname;
+    if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
       return cors(request, await withDb(env, async (db) => {
-        if (path === "/healthz" && request.method === "GET") {
+        if ((path === "/healthz" || path === "/api/readyz") && request.method === "GET") {
           await db.query("SELECT 1");
           return json({ ok: true, database: "connected" });
-        }
-        if (path === "/api/healthz") return json({ ok: true, service: "bluejob-api" });
-        if (path === "/api/readyz") {
-          await db.query("SELECT 1");
-          return json({ ok: true, database: "ready" });
         }
         const authResponse = await auth(request, env, db, path);
         if (authResponse) return authResponse;
         const user = await session(request, db);
-        return await api(request, env, db, user, path);
+        return api(request, env, db, user, path);
       }));
     } catch (error) {
       console.error("request failed", error.message);
