@@ -1,0 +1,1 @@
+export const emptyPassport = { name: '', location: '', travelRadius: '', trade: '', workerType: 'Individual', crewSize: '1', yearsExperience: '', skills: '', availability: 'Available now', tools: '', transportation: '', history: [] };

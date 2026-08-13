@@ -1,5 +1,32 @@
-# bluejob.net
-Hard-working individuals are always in demand. This connection layer, established between the General Contractor (GC) and the subcontractor, fosters excellent relationships that contribute to a high working score. As long as this score remains favorable, it ensures a steady flow of work and guarantees the delivery of high-quality work.
+# BlueJob White UI
+
+White/blue BlueJob frontend matching the approved visual direction.
+
+## Run
+
+```bash
+npm install
+npm run dev
+```
+
+## Included routes
+
+- `/` — public landing page
+- `/signup` — account creation
+- `/signin` — sign in
+- `/choose-path` — subcontractor vs contractor path
+- `/app/worker` — Work Score / Work Passport worker dashboard
+- `/app/passport` — public Work Passport
+- `/app/passport/edit` — structured Passport editor
+- `/app/verification` — private evidence submission and review states
+- `/app/contractor` — contractor operations dashboard
+- `/app/post-job` — 5-step job posting flow
+- `/app/jobs/1/bids` — bid comparison + bidding insights
+- `/app/admin` — private Super Admin Command Center (requires `SUPER_ADMIN` session role)
+
+## Important
+
+Authentication uses server-side JWT in HttpOnly cookies. Work Passport data, verification evidence, and all application state persist in the database via the backend API. Passwords, payment data, verification documents, Work Score decisions, and admin authorization are all handled server-side.
 
 ## Admin bootstrap
 

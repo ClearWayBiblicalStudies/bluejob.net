@@ -1,12 +1,21 @@
 {
-  "name": "bluejob-api",
+  "name": "bluejob-server",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check src/worker.js",
-    "migrate": "node migrate.js"
+    "start": "node src/index.js",
+    "seed:founder": "node src/seed-founder.js",
+    "test": "NODE_ENV=test node --test test/*.test.js",
+    "check": "node --check src/index.js && node --check src/lib/auth.js && node --check src/routes/auth.js && node --check src/routes/jobs.js && node --check src/routes/admin.js"
   },
   "dependencies": {
-    "pg": "^8.23.0"
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
+    "pg": "^8.13.1"
   }
 }

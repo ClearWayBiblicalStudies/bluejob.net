@@ -1,28 +1,23 @@
 {
-  "name": "bluejob",
+  "name": "bluejob-white-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Hard-working individuals are always in demand. This connection layer, established between the General Contractor (GC) and the subcontractor, fosters excellent relationships that contribute to a high working score. As long as this score remains favorable, it ensures a steady flow of work and guarantees the delivery of high-quality work.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vitejs/plugin-react": "6.0.5",
+    "lucide-react": "1.31.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "lucide-react": "1.31.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "6.0.5",
+    "react-router-dom": "7.18.2",
     "vite": "8.2.1"
   },
-  "description": "Hard-working individuals are always in demand. This connection layer, established between the General Contractor (GC) and the subcontractor, fosters excellent relationships that contribute to a high working score. As long as this score remains favorable, it ensures a steady flow of work and guarantees the delivery of high-quality work.",
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "http://localhost:26831/ClearWayBiblicalStudies/bluejob.net"
-  },
+  "devDependencies": {},
   "keywords": [],
   "author": "",
   "license": "ISC"
