@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
+import { pool } from './db.js';
 
-const revoked = new Set();
 const cookieName = 'bluejob_access';
 
 export function signUser(user) {
@@ -13,12 +13,20 @@ export function requireAuth(req, res, next) {
     return [key, decodeURIComponent(value.join('='))];
   }));
   const token = cookies[cookieName];
+  let payload;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    if (!req.user.jti || revoked.has(req.user.jti)) throw new Error('revoked');
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Authentication required' });
   }
-  catch { res.status(401).json({ error: 'Authentication required' }); }
+  if (!payload.jti) return res.status(401).json({ error: 'Authentication required' });
+  pool.query('SELECT 1 FROM revoked_tokens WHERE jti=$1 AND expires_at > now()', [payload.jti])
+    .then(({ rows }) => {
+      if (rows[0]) return res.status(401).json({ error: 'Authentication required' });
+      req.user = payload;
+      next();
+    })
+    .catch(() => res.status(401).json({ error: 'Authentication required' }));
 }
 export function requireRole(...roles) {
   return (req, res, next) => roles.includes(req.user?.role) ? next() : res.status(403).json({ error: 'Forbidden' });
@@ -29,6 +37,13 @@ export function setAuthCookie(res, token) {
 export function clearAuthCookie(res) {
   res.setHeader('Set-Cookie', `${cookieName}=; Path=/; HttpOnly; ${process.env.NODE_ENV === 'production' ? 'Secure; ' : ''}SameSite=Lax; Max-Age=0`);
 }
-export function revokeToken(token) {
-  try { revoked.add(jwt.decode(token)?.jti); } catch {}
+export async function revokeToken(token) {
+  try {
+    const decoded = jwt.decode(token);
+    if (!decoded?.jti || !decoded?.exp) return;
+    await pool.query(
+      'INSERT INTO revoked_tokens(jti,expires_at) VALUES($1,to_timestamp($2)) ON CONFLICT DO NOTHING',
+      [decoded.jti, decoded.exp]
+    );
+  } catch {}
 }

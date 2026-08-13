@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import Logo from '../components/Logo';
-import { api, setToken } from '../lib/api';
+import { api } from '../lib/api';
 
 export default function SignInPage() {
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ export default function SignInPage() {
       <div className="auth-card white-card">
         <h1>Welcome Back</h1>
         <p>Sign in to continue to BlueJob.</p>
-        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { const result = await api.signin({ email: form.get('email'), password: form.get('password') }); setToken(result.token); navigate(result.user.role === 'SUPER_ADMIN' ? '/app/admin' : `/app/${result.user.role === 'CONTRACTOR' ? 'contractor' : 'worker'}`); } catch (err) { setError(err.message); } }}>
+        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { const result = await api.signin({ email: form.get('email'), password: form.get('password') }); if (result.mfaRequired) { navigate('/signin/mfa', { state: { userId: result.userId, challenge: result.challenge } }); return; } navigate(result.user.role === 'SUPER_ADMIN' ? '/app/admin' : `/app/${result.user.role === 'CONTRACTOR' ? 'contractor' : 'worker'}`); } catch (err) { setError(err.message); } }}>
           <label>Email<input name="email" type="email" placeholder="you@company.com" required /></label>
           <label>Password<input name="password" type="password" placeholder="••••••••••" required /></label>
           <div className="form-inline"><label className="checkbox"><input type="checkbox"/> Remember me</label><a href="#reset">Forgot password?</a></div>

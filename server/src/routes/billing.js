@@ -5,7 +5,9 @@ import { requireAuth } from '../lib/auth.js';
 const router = Router();
 router.post('/checkout', requireAuth, async (req,res) => {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PRICE_ID) return res.status(503).json({error:'Stripe is not configured'});
-  const body = new URLSearchParams({mode:'subscription',success_url:process.env.STRIPE_SUCCESS_URL || 'http://localhost:5173/membership/success',cancel_url:process.env.STRIPE_CANCEL_URL || 'http://localhost:5173/membership', 'line_items[0][price]':process.env.STRIPE_PRICE_ID,'line_items[0][quantity]':'1','client_reference_id':req.user.sub,'customer_email':req.user.email});
+  const { rows: userRows } = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.sub]);
+  const customerEmail = userRows[0]?.email;
+  const body = new URLSearchParams({mode:'subscription',success_url:process.env.STRIPE_SUCCESS_URL || 'http://localhost:5173/membership/success',cancel_url:process.env.STRIPE_CANCEL_URL || 'http://localhost:5173/membership', 'line_items[0][price]':process.env.STRIPE_PRICE_ID,'line_items[0][quantity]':'1','client_reference_id':req.user.sub,...(customerEmail ? {customer_email: customerEmail} : {})});
   const response=await fetch('https://api.stripe.com/v1/checkout/sessions',{method:'POST',headers:{Authorization: 'Bearer ' + process.env.STRIPE_SECRET_KEY, 'Content-Type':'application/x-www-form-urlencoded'},body});
   if(!response.ok) return res.status(502).json({error:'Unable to create checkout session'}); const session=await response.json(); res.json({url:session.url,id:session.id});
 });

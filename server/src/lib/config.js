@@ -1,5 +1,5 @@
 export function validateEnvironment() {
-  const required = ['DATABASE_URL', 'JWT_SECRET', 'STRIPE_SECRET_KEY', 'STRIPE_PRICE_ID', 'STRIPE_WEBHOOK_SECRET', 'EMAIL_PROVIDER_URL', 'SMS_PROVIDER_URL', 'VERIFICATION_PROVIDER_TOKEN', 'MALWARE_SCAN_COMMAND', 'CLIENT_ORIGIN', 'STRIPE_SUCCESS_URL', 'STRIPE_CANCEL_URL'];
+  const required = ['DATABASE_URL', 'JWT_SECRET', 'STRIPE_SECRET_KEY', 'STRIPE_PRICE_ID', 'STRIPE_WEBHOOK_SECRET', 'EMAIL_PROVIDER_URL', 'SMS_PROVIDER_URL', 'CLIENT_ORIGIN', 'STRIPE_SUCCESS_URL', 'STRIPE_CANCEL_URL'];
   const missing = required.filter((key) => !process.env[key] || /replace[-_]?with|replace_me|example\.com/i.test(process.env[key]));
   if (process.env.NODE_ENV === 'production' && missing.length) throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   if (process.env.NODE_ENV !== 'production') {

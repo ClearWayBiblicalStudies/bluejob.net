@@ -2,7 +2,7 @@ import { Check, Eye } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import Logo from '../components/Logo';
-import { api, setToken } from '../lib/api';
+import { api } from '../lib/api';
 
 export default function SignUpPage() {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export default function SignUpPage() {
       <div className="auth-card white-card">
         <h1>Create Your BlueJob Account</h1>
         <p>Join thousands of professionals building stronger work relationships.</p>
-        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { const result = await api.signup({ name: form.get('name'), email: form.get('email'), password: form.get('password') }); setToken(result.token); navigate('/choose-path'); } catch (err) { setError(err.message); } }}>
+        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { await api.signup({ name: form.get('name'), email: form.get('email'), password: form.get('password') }); navigate('/choose-path'); } catch (err) { setError(err.message); } }}>
           <label>Full Name<input name="name" required /></label>
           <label>Email<input name="email" type="email" required /></label>
           <label>Password<div className="password-field"><input name="password" type="password" minLength="8" required /><Eye size={18}/></div></label>

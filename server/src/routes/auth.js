@@ -29,9 +29,9 @@ router.post('/mfa/verify-login', async (req,res) => {
   if (!rows[0] || !validTotp(rows[0].mfa_secret, req.body.code)) return res.status(401).json({error:'Invalid MFA code'});
   const {mfa_secret, ...user} = rows[0]; const token = signUser(user); setAuthCookie(res, token); res.json({user});
 });
-router.post('/logout', requireAuth, (req, res) => {
+router.post('/logout', requireAuth, async (req, res) => {
   const token = String(req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith('bluejob_access='))?.slice('bluejob_access='.length);
-  if (token) revokeToken(decodeURIComponent(token));
+  if (token) await revokeToken(decodeURIComponent(token));
   clearAuthCookie(res); res.status(204).end();
 });
 function validTotp(secret, value) {
