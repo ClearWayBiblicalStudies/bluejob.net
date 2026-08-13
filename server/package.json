@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node --check src/worker.js",
     "migrate": "node migrate.js"
   },
   "dependencies": {
