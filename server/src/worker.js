@@ -482,7 +482,7 @@ export default {
         const authResponse = await auth(request, env, db, path);
         if (authResponse) return authResponse;
         const user = await session(request, db);
-        return api(request, env, db, user, path);
+        return await api(request, env, db, user, path);
       }));
     } catch (error) {
       console.error("request failed", error.message);
