@@ -6,8 +6,35 @@ import {
   Star,
   Users,
 } from "lucide-react";
+import { useState } from "react";
 
 export default function App() {
+  const [authMode, setAuthMode] = useState(null);
+  const [message, setMessage] = useState("");
+
+  async function submitAuth(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const endpoint = authMode === "signup" ? "/api/auth/register"
+      : authMode === "reset" ? "/api/auth/forgot-password"
+        : "/api/auth/login";
+    const payload = authMode === "signup"
+      ? { displayName: form.get("displayName"), email: form.get("email"), password: form.get("password") }
+      : authMode === "reset"
+        ? { email: form.get("email") }
+        : { email: form.get("email"), password: form.get("password") };
+    const response = await fetch(endpoint, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    setMessage(response.ok
+      ? authMode === "reset" ? "If an account exists, password reset instructions have been sent." : "You are signed in."
+      : body.error || "Request failed.");
+  }
+
   return (
     <div className="app">
       <header className="navbar">
@@ -20,10 +47,24 @@ export default function App() {
           <a href="#workscore">Work Score</a>
         </nav>
         <div className="navActions">
-          <button type="button" className="loginButton">Log in</button>
-          <button type="button" className="primaryButton">Join BlueJob</button>
+          <button type="button" className="loginButton" onClick={() => { setAuthMode("login"); setMessage(""); }}>Log in</button>
+          <button type="button" className="primaryButton" onClick={() => { setAuthMode("signup"); setMessage(""); }}>Join BlueJob</button>
         </div>
       </header>
+      {authMode && (
+        <section className="features">
+          <form className="feature" onSubmit={submitAuth}>
+            <h3>{authMode === "signup" ? "Join BlueJob" : authMode === "reset" ? "Reset password" : "Log in"}</h3>
+            {authMode === "signup" && <input name="displayName" placeholder="Name" required />}
+            <input name="email" type="email" placeholder="Email" required />
+            {authMode !== "reset" && <input name="password" type="password" minLength="12" placeholder="Password" required />}
+            <button type="submit" className="primaryButton">{authMode === "reset" ? "Send reset link" : "Continue"}</button>
+            {authMode === "login" && <button type="button" className="loginButton" onClick={() => { setAuthMode("reset"); setMessage(""); }}>Forgot password?</button>}
+            <button type="button" className="loginButton" onClick={() => setAuthMode(null)}>Cancel</button>
+            {message && <p>{message}</p>}
+          </form>
+        </section>
+      )}
 
       <main>
         <section className="hero">
@@ -41,7 +82,7 @@ export default function App() {
               through verified work history, reputation and opportunity.
             </p>
             <div className="heroButtons">
-              <button type="button" className="primaryButton large">
+              <button type="button" className="primaryButton large" onClick={() => { setAuthMode("signup"); setMessage(""); }}>
                 Build your profile
                 <ArrowRight size={18} />
               </button>
