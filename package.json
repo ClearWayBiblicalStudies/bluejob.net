@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "Hard-working individuals are always in demand. This connection layer, established between the General Contractor (GC) and the subcontractor, fosters excellent relationships that contribute to a high working score. As long as this score remains favorable, it ensures a steady flow of work and guarantees the delivery of high-quality work.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,5 +17,8 @@
     "react-router-dom": "7.18.2",
     "vite": "8.2.1"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

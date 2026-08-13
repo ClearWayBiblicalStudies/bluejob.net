@@ -14,3 +14,7 @@ CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status,created_at DESC);
 CREATE TABLE IF NOT EXISTS bids (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), job_id uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, bidder_id uuid NOT NULL REFERENCES users(id), amount numeric(12,2) NOT NULL, message text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','REJECTED','WITHDRAWN')), created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(job_id,bidder_id));
 CREATE TABLE IF NOT EXISTS ratings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), job_id uuid REFERENCES jobs(id) ON DELETE CASCADE, rater_id uuid NOT NULL REFERENCES users(id), rated_user_id uuid NOT NULL REFERENCES users(id), score numeric(3,2) NOT NULL CHECK(score>=0 AND score<=5), created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(job_id,rater_id,rated_user_id));
 CREATE TABLE IF NOT EXISTS memberships (user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, stripe_customer_id text, stripe_subscription_id text UNIQUE, status text NOT NULL DEFAULT 'INACTIVE', updated_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS views integer NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eligible_matches integer NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS response_signal text NOT NULL DEFAULT 'INSUFFICIENT_DATA';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_path text;
