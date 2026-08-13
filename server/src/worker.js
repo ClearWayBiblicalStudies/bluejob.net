@@ -21,9 +21,13 @@ const cors = (request, response) => {
 
 async function withDb(env, callback) {
   if (!env.HYPERDRIVE?.connectionString) throw new Error("Database binding is not configured");
-  const client = new Client({ connectionString: env.HYPERDRIVE.connectionString });
+  const client = new Client({
+    connectionString: env.HYPERDRIVE.connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
   await client.connect();
   try {
+    await client.query("SET search_path TO bluejob, public");
     return await callback(client);
   } finally {
     await client.end().catch(() => {});
@@ -31,8 +35,48 @@ async function withDb(env, callback) {
 }
 
 async function passwordHash(password, pepper) {
+  const salt = randomBytes(16).toString("base64url");
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
+  const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 600000 }, key, 256);
+  return `pbkdf2$600000$${salt}$${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function passwordMatches(password, storedHash, pepper) {
+  if (storedHash.startsWith("pbkdf2$")) {
+    const [algorithm, iterations, salt, expected] = storedHash.split("$");
+    if (algorithm !== "pbkdf2" || !/^\d+$/.test(iterations) || !salt || !/^[0-9a-f]{64}$/.test(expected)) return false;
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
+    const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: Number(iterations) }, key, 256);
+    const actual = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return actual === expected;
+  }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${pepper}:${password}`));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === storedHash;
+}
+
+function resetEmailConfigured(env) {
+  return Boolean(env.RESEND_API_KEY && env.PASSWORD_RESET_FROM);
+}
+
+async function sendPasswordResetEmail(env, email, token) {
+  const origin = new URL(env.APP_ORIGIN || "https://bluejob.net");
+  if (origin.protocol !== "https:") throw new Error("Password reset origin must use HTTPS");
+  const resetUrl = new URL("/reset-password", origin);
+  resetUrl.searchParams.set("token", token);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + env.RESEND_API_KEY,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: env.PASSWORD_RESET_FROM,
+      to: email,
+      subject: "Set your BlueJob password",
+      html: `<p>Use this one-time link to set your BlueJob password:</p><p><a href="${resetUrl.href}">Set password</a></p><p>This link expires in one hour.</p>`,
+    }),
+  });
+  if (!response.ok) throw new Error("Password reset email delivery failed");
 }
 
 function body(request) {
@@ -60,20 +104,34 @@ function requireRole(user, role) {
 }
 
 async function auth(request, env, db, path) {
-  if (path === "/api/auth/register" && request.method === "POST") {
+  if (["/api/auth/register", "/api/auth/signup"].includes(path) && request.method === "POST") {
     const input = await body(request);
-    if (!input.email || !input.password || input.password.length < 12 || !input.displayName) {
+    const accountType = input.accountType === "CONTRACTOR" ? "CONTRACTOR" : "WORKER";
+    const displayName = input.displayName?.trim();
+    const companyName = input.companyName?.trim();
+    if (!input.email || !input.password || input.password.length < 12 || !displayName ||
+      displayName.length > 120 || (accountType === "CONTRACTOR" && (!companyName || companyName.length > 160))) {
       return json({ error: "email, displayName, and a 12-character password are required" }, 400);
     }
     const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
     try {
+      await db.query("BEGIN");
       const result = await db.query(
-        "INSERT INTO users(email,password_hash,display_name) VALUES($1,$2,$3) RETURNING id,email,display_name",
-        [input.email.toLowerCase(), password, input.displayName],
+        "INSERT INTO users(email,password_hash,display_name,onboarding_path) VALUES($1,$2,$3,$4) RETURNING id,email,display_name,onboarding_path",
+        [input.email.toLowerCase(), password, displayName, accountType],
       );
-      await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='WORKER'", [result.rows[0].id]);
-      return json(result.rows[0], 201);
+      const user = result.rows[0];
+      await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name=$2", [user.id, accountType]);
+      if (accountType === "CONTRACTOR") {
+        const company = await db.query("INSERT INTO companies(name,created_by) VALUES($1,$2) RETURNING id", [companyName, user.id]);
+        await db.query("INSERT INTO company_memberships(company_id,user_id,role) VALUES($1,$2,'OWNER')", [company.rows[0].id, user.id]);
+      }
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
+      await db.query("COMMIT");
+      return json({ ...user, roles: [accountType] }, 201, { "set-cookie": cookie(token, 604800) });
     } catch (error) {
+      await db.query("ROLLBACK").catch(() => {});
       if (error.code === "23505") return json({ error: "Account already exists" }, 409);
       throw error;
     }
@@ -82,14 +140,71 @@ async function auth(request, env, db, path) {
     const input = await body(request);
     const result = await db.query("SELECT * FROM users WHERE email=$1", [input.email?.toLowerCase()]);
     const user = result.rows[0];
-    if (!user || user.password_hash !== await passwordHash(input.password || "", env.PASSWORD_PEPPER || "")) {
+    if (!user || !await passwordMatches(input.password || "", user.password_hash, env.PASSWORD_PEPPER || "")) {
       return json({ error: "Invalid credentials" }, 401);
     }
     const token = randomBytes(32).toString("base64url");
     await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
-    return json({ ok: true, requiresPasswordChange: user.force_password_change }, 200, {
+    const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
+    return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
       "set-cookie": cookie(token, 604800),
     });
+  }
+  if (["/api/auth/password-reset/request", "/api/auth/forgot-password"].includes(path) && request.method === "POST") {
+    const email = (await body(request)).email?.trim().toLowerCase();
+    if (!email || !resetEmailConfigured(env)) return json({ ok: true });
+    const result = await db.query("SELECT id FROM users WHERE email=$1", [email]);
+    if (!result.rowCount) return json({ ok: true });
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hash(token);
+    await db.query("DELETE FROM password_reset_tokens WHERE user_id=$1 OR expires_at <= now()", [result.rows[0].id]);
+    await db.query(
+      "INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 hour')",
+      [result.rows[0].id, tokenHash],
+    );
+    try {
+      await sendPasswordResetEmail(env, email, token);
+    } catch (error) {
+      await db.query("DELETE FROM password_reset_tokens WHERE token_hash=$1", [tokenHash]);
+      console.error("password reset delivery failed");
+    }
+    return json({ ok: true });
+  }
+  if (["/api/auth/password-reset/confirm", "/api/auth/reset-password"].includes(path) && request.method === "POST") {
+    const input = await body(request);
+    if (!input.token || !input.password || input.password.length < 12) {
+      return json({ error: "A valid reset link and a 12-character password are required" }, 400);
+    }
+    await db.query("BEGIN");
+    try {
+      const reset = await db.query(
+        `UPDATE password_reset_tokens
+            SET used_at=now()
+          WHERE token_hash=$1 AND used_at IS NULL AND expires_at > now()
+        RETURNING user_id`,
+        [hash(input.token)],
+      );
+      if (!reset.rowCount) {
+        await db.query("ROLLBACK");
+        return json({ error: "This password reset link is invalid or expired" }, 400);
+      }
+      const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
+      const user = await db.query(
+        "UPDATE users SET password_hash=$1,force_password_change=false,updated_at=now() WHERE id=$2 RETURNING id,email,display_name,onboarding_path",
+        [password, reset.rows[0].user_id],
+      );
+      await db.query("DELETE FROM sessions WHERE user_id=$1", [user.rows[0].id]);
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.rows[0].id, hash(token)]);
+      await db.query("COMMIT");
+      const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
+      return json({ ok: true, user: { id: user.rows[0].id, email: user.rows[0].email, displayName: user.rows[0].display_name, roles: current?.roles || [], onboardingPath: user.rows[0].onboarding_path } }, 200, {
+        "set-cookie": cookie(token, 604800),
+      });
+    } catch (error) {
+      await db.query("ROLLBACK").catch(() => {});
+      throw error;
+    }
   }
   if (path === "/api/auth/logout" && request.method === "POST") {
     const token = request.headers.get("Cookie")?.match(/(?:^|;\s*)bj_session=([^;]+)/)?.[1];
@@ -115,7 +230,8 @@ async function api(request, env, db, user, path) {
   if (path === "/api/passport" && request.method === "GET") {
     const result = await db.query("SELECT * FROM work_passports WHERE user_id=$1", [user.id]);
     const scores = await db.query("SELECT score,status,factors,created_at FROM work_score_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20", [user.id]);
-    return json({ passport: result.rows[0] || null, score: scores.rows[0] || { status: "BUILDING" }, history: scores.rows });
+    const history = await db.query("SELECT id,title,details,started_on,ended_on,status,created_at FROM work_history WHERE user_id=$1 ORDER BY started_on DESC NULLS LAST,created_at DESC", [user.id]);
+    return json({ passport: result.rows[0] || null, score: scores.rows[0] || { status: "BUILDING" }, scoreHistory: scores.rows, workHistory: history.rows });
   }
   if (path === "/api/passport" && request.method === "PUT") {
     const input = await body(request);
@@ -127,6 +243,73 @@ async function api(request, env, db, user, path) {
       [user.id, input.trade, JSON.stringify(input.skills || []), input.yearsExperience, input.serviceArea, input.profileSummary],
     );
     return json(result.rows[0]);
+  }
+  if (path === "/api/passport/history" && request.method === "POST") {
+    const input = await body(request);
+    if (!input.title?.trim() || input.title.length > 160 || (input.details && input.details.length > 4000)) {
+      return json({ error: "A work-history title is required" }, 400);
+    }
+    const result = await db.query(
+      "INSERT INTO work_history(user_id,title,details,started_on,ended_on) VALUES($1,$2,$3,$4,$5) RETURNING id,title,details,started_on,ended_on,status,created_at",
+      [user.id, input.title.trim(), input.details?.trim() || null, input.startedOn || null, input.endedOn || null],
+    );
+    return json(result.rows[0], 201);
+  }
+  if (path === "/api/company" && request.method === "GET") {
+    const result = await db.query(
+      "SELECT c.id,c.name,c.slug,cm.role FROM companies c JOIN company_memberships cm ON cm.company_id=c.id WHERE cm.user_id=$1 ORDER BY c.created_at LIMIT 1",
+      [user.id],
+    );
+    return json({ company: result.rows[0] || null });
+  }
+  if (path === "/api/company" && request.method === "PUT") {
+    const denied = requireRole(user, "CONTRACTOR");
+    if (denied) return denied;
+    const input = await body(request);
+    const name = input.name?.trim();
+    if (!name || name.length > 160) return json({ error: "A company name is required" }, 400);
+    const existing = await db.query("SELECT c.id FROM companies c JOIN company_memberships cm ON cm.company_id=c.id WHERE cm.user_id=$1 LIMIT 1", [user.id]);
+    const result = existing.rowCount
+      ? await db.query("UPDATE companies SET name=$1 WHERE id=$2 RETURNING id,name,slug", [name, existing.rows[0].id])
+      : await db.query("INSERT INTO companies(name,created_by) VALUES($1,$2) RETURNING id,name,slug", [name, user.id]);
+    if (!existing.rowCount) await db.query("INSERT INTO company_memberships(company_id,user_id,role) VALUES($1,$2,'OWNER')", [result.rows[0].id, user.id]);
+    return json({ company: result.rows[0] });
+  }
+  if (path === "/api/workers" && request.method === "GET") {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim().slice(0, 100) || "";
+    const trade = url.searchParams.get("trade")?.trim().slice(0, 100) || "";
+    const location = url.searchParams.get("location")?.trim().slice(0, 100) || "";
+    const result = await db.query(
+      `SELECT u.id,u.display_name,p.trade,p.skills,p.years_experience,p.service_area,p.profile_summary,p.verification_status,
+              score.score,ratings.rating,ratings.reliability,COALESCE(history.count,0)::integer work_history_count
+         FROM users u JOIN work_passports p ON p.user_id=u.id
+         LEFT JOIN LATERAL (SELECT score FROM work_score_snapshots WHERE user_id=u.id ORDER BY created_at DESC LIMIT 1) score ON true
+         LEFT JOIN LATERAL (SELECT avg((quality + reliability + communication) / 3.0)::numeric(3,2) rating,avg(reliability)::numeric(3,2) reliability FROM worker_feedback WHERE worker_id=u.id) ratings ON true
+         LEFT JOIN LATERAL (SELECT count(*) FROM work_history WHERE user_id=u.id) history ON true
+        WHERE ($1='' OR u.display_name ILIKE '%' || $1 || '%' OR p.trade ILIKE '%' || $1 || '%' OR p.skills::text ILIKE '%' || $1 || '%')
+          AND ($2='' OR p.trade ILIKE '%' || $2 || '%')
+          AND ($3='' OR p.service_area ILIKE '%' || $3 || '%')
+        ORDER BY p.verification_status='VERIFIED' DESC, score.score DESC NULLS LAST, u.display_name
+        LIMIT 50`,
+      [q, trade, location],
+    );
+    return json({ workers: result.rows });
+  }
+  const workerMatch = path.match(/^\/api\/workers\/([0-9a-f-]{36})$/i);
+  if (workerMatch && request.method === "GET") {
+    const profile = await db.query(
+      `SELECT u.id,u.display_name,p.trade,p.skills,p.years_experience,p.service_area,p.profile_summary,p.verification_status,
+              score.score,ratings.rating,ratings.reliability
+         FROM users u JOIN work_passports p ON p.user_id=u.id
+         LEFT JOIN LATERAL (SELECT score FROM work_score_snapshots WHERE user_id=u.id ORDER BY created_at DESC LIMIT 1) score ON true
+         LEFT JOIN LATERAL (SELECT avg((quality + reliability + communication) / 3.0)::numeric(3,2) rating,avg(reliability)::numeric(3,2) reliability FROM worker_feedback WHERE worker_id=u.id) ratings ON true
+        WHERE u.id=$1`,
+      [workerMatch[1]],
+    );
+    if (!profile.rowCount) return json({ error: "Worker not found" }, 404);
+    const history = await db.query("SELECT id,title,details,started_on,ended_on,status FROM work_history WHERE user_id=$1 ORDER BY started_on DESC NULLS LAST,created_at DESC", [workerMatch[1]]);
+    return json({ worker: profile.rows[0], workHistory: history.rows });
   }
   if (path === "/api/jobs" && request.method === "POST") {
     const denied = requireRole(user, "CONTRACTOR");
@@ -263,6 +446,20 @@ async function api(request, env, db, user, path) {
     if (denied || !user.mfa_verified_at) return denied || json({ error: "MFA required" }, 403);
     return json((await db.query("SELECT id,user_id,type,status,submitted_at,metadata FROM evidence WHERE status='PENDING' ORDER BY submitted_at")).rows);
   }
+  if (path === "/api/admin/dashboard" && request.method === "GET") {
+    const denied = requireRole(user, "ADMIN");
+    if (denied) return denied;
+    const [users, pendingEvidence, openDisputes] = await Promise.all([
+      db.query("SELECT count(*)::integer count FROM users"),
+      db.query("SELECT count(*)::integer count FROM evidence WHERE status='PENDING'"),
+      db.query("SELECT count(*)::integer count FROM disputes WHERE status='OPEN'"),
+    ]);
+    return json({
+      users: users.rows[0].count,
+      pendingEvidence: pendingEvidence.rows[0].count,
+      openDisputes: openDisputes.rows[0].count,
+    });
+  }
   return json({ error: "Not found" }, 404);
 }
 
@@ -274,13 +471,18 @@ export default {
     if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
       return cors(request, await withDb(env, async (db) => {
-        if (path === "/api/readyz") {
+        if (path === "/healthz" && request.method === "GET") {
+          await db.query("SELECT 1");
+          return json({ ok: true, database: "connected" });
+        }
+        if (path === "/api/readyz" && request.method === "GET") {
           await db.query("SELECT 1");
           return json({ ok: true, database: "ready" });
         }
-        const user = await session(request, db);
         const authResponse = await auth(request, env, db, path);
-        return authResponse || await api(request, env, db, user, path);
+        if (authResponse) return authResponse;
+        const user = await session(request, db);
+        return api(request, env, db, user, path);
       }));
     } catch (error) {
       console.error("request failed", error.message);
