@@ -468,9 +468,10 @@ export default {
     if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
     const url = new URL(request.url);
     const path = url.pathname;
+    if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
       return cors(request, await withDb(env, async (db) => {
-        if ((path === "/healthz" || path === "/api/healthz" || path === "/api/readyz") && request.method === "GET") {
+        if ((path === "/healthz" || path === "/api/readyz") && request.method === "GET") {
           await db.query("SELECT 1");
           return json({ ok: true, database: "connected" });
         }
