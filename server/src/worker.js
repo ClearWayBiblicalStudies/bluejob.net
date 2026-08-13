@@ -9,9 +9,11 @@ const json = (body, status = 200, headers = {}) =>
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const cookie = (token, maxAge) =>
   `bj_session=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`;
-const cors = (request, response) => {
+const encoder = new TextEncoder();
+const PBKDF2_ITERATIONS = 310000;
+const cors = (request, response, env) => {
   const origin = request.headers.get("Origin");
-  if (origin === "https://bluejob.net" || origin === "http://localhost:5173") {
+  if (origin === (env.APP_ORIGIN || "https://bluejob.net") || origin === "http://localhost:5173") {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set("Access-Control-Allow-Credentials", "true");
     response.headers.set("Vary", "Origin");
@@ -24,14 +26,59 @@ async function withDb(env, callback) {
   const client = new Client({ connectionString: env.HYPERDRIVE.connectionString });
   await client.connect();
   try {
+    await client.query("SET search_path TO bluejob");
     return await callback(client);
   } finally {
     await client.end().catch(() => {});
   }
 }
 
-async function passwordHash(password, pepper) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${pepper}:${password}`));
+const base64url = (bytes) => btoa(String.fromCharCode(...bytes))
+  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromBase64url = (value) => Uint8Array.from(
+  atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=")),
+  (character) => character.charCodeAt(0),
+);
+
+async function derivePassword(password, salt, iterations) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    key,
+    256,
+  ));
+}
+
+async function passwordHash(password) {
+  const salt = randomBytes(16);
+  const digest = await derivePassword(password, salt, PBKDF2_ITERATIONS);
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${base64url(salt)}$${base64url(digest)}`;
+}
+
+function sameBytes(left, right) {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
+async function verifyPassword(password, stored, pepper) {
+  const parts = String(stored || "").split("$");
+  if (parts.length === 4 && parts[0] === "pbkdf2") {
+    const iterations = Number(parts[1]);
+    if (!Number.isSafeInteger(iterations) || iterations < 100000 || iterations > 1000000) return false;
+    try {
+      return sameBytes(await derivePassword(password, fromBase64url(parts[2]), iterations), fromBase64url(parts[3]));
+    } catch {
+      return false;
+    }
+  }
+  // Allow existing SHA-256 accounts to sign in once, then upgrade them to PBKDF2.
+  return stored === await legacyPasswordHash(password, pepper);
+}
+
+async function legacyPasswordHash(password, pepper) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${pepper}:${password}`));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -54,6 +101,12 @@ async function session(request, db) {
   return result.rows[0] ?? null;
 }
 
+async function createSession(db, userId) {
+  const token = randomBytes(32).toString("base64url");
+  await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [userId, hash(token)]);
+  return token;
+}
+
 function requireRole(user, role) {
   if (!user || !user.roles.includes(role)) return json({ error: "Forbidden" }, 403);
   return null;
@@ -62,17 +115,20 @@ function requireRole(user, role) {
 async function auth(request, env, db, path) {
   if (path === "/api/auth/register" && request.method === "POST") {
     const input = await body(request);
-    if (!input.email || !input.password || input.password.length < 12 || !input.displayName) {
+    const email = String(input.email || "").trim().toLowerCase();
+    const displayName = String(input.displayName || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof input.password !== "string" || input.password.length < 12 || !displayName) {
       return json({ error: "email, displayName, and a 12-character password are required" }, 400);
     }
-    const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
+    const password = await passwordHash(input.password);
     try {
       const result = await db.query(
         "INSERT INTO users(email,password_hash,display_name) VALUES($1,$2,$3) RETURNING id,email,display_name",
-        [input.email.toLowerCase(), password, input.displayName],
+        [email, password, displayName],
       );
       await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='WORKER'", [result.rows[0].id]);
-      return json(result.rows[0], 201);
+      const token = await createSession(db, result.rows[0].id);
+      return json({ ...result.rows[0], ok: true }, 201, { "set-cookie": cookie(token, 604800) });
     } catch (error) {
       if (error.code === "23505") return json({ error: "Account already exists" }, 409);
       throw error;
@@ -80,16 +136,58 @@ async function auth(request, env, db, path) {
   }
   if (path === "/api/auth/login" && request.method === "POST") {
     const input = await body(request);
-    const result = await db.query("SELECT * FROM users WHERE email=$1", [input.email?.toLowerCase()]);
+    const email = String(input.email || "").trim().toLowerCase();
+    if (!email || typeof input.password !== "string") return json({ error: "email and password are required" }, 400);
+    const result = await db.query("SELECT * FROM users WHERE email=$1", [email]);
     const user = result.rows[0];
-    if (!user || user.password_hash !== await passwordHash(input.password || "", env.PASSWORD_PEPPER || "")) {
+    if (!user || !await verifyPassword(input.password, user.password_hash, env.PASSWORD_PEPPER || "")) {
       return json({ error: "Invalid credentials" }, 401);
     }
-    const token = randomBytes(32).toString("base64url");
-    await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
+    if (!String(user.password_hash).startsWith("pbkdf2$")) {
+      await db.query("UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2", [await passwordHash(input.password), user.id]);
+    }
+    const token = await createSession(db, user.id);
     return json({ ok: true, requiresPasswordChange: user.force_password_change }, 200, {
       "set-cookie": cookie(token, 604800),
     });
+  }
+  if (path === "/api/auth/forgot-password" && request.method === "POST") {
+    const email = String((await body(request)).email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "A valid email is required" }, 400);
+    const user = await db.query("SELECT id FROM users WHERE email=$1", [email]);
+    if (user.rowCount) {
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 minutes')", [user.rows[0].id, hash(token)]);
+      if (env.RESEND_API_KEY && env.PASSWORD_RESET_FROM) {
+        const origin = env.APP_ORIGIN || "https://bluejob.net";
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
+          body: JSON.stringify({ from: env.PASSWORD_RESET_FROM, to: [email], subject: "Reset your BlueJob password", html: `<p>Reset your password: <a href="${origin}/reset-password?token=${encodeURIComponent(token)}">Reset password</a></p>` }),
+        });
+        if (!response.ok) console.error("password reset delivery failed", response.status);
+      }
+    }
+    return json({ ok: true });
+  }
+  if (path === "/api/auth/reset-password" && request.method === "POST") {
+    const input = await body(request);
+    if (typeof input.token !== "string" || typeof input.password !== "string" || input.password.length < 12) {
+      return json({ error: "A reset token and a 12-character password are required" }, 400);
+    }
+    const reset = await db.query("SELECT id,user_id FROM password_reset_tokens WHERE token_hash=$1 AND used_at IS NULL AND expires_at > now()", [hash(input.token)]);
+    if (!reset.rowCount) return json({ error: "Reset token is invalid or expired" }, 400);
+    await db.query("BEGIN");
+    try {
+      await db.query("UPDATE users SET password_hash=$1,force_password_change=false,updated_at=now() WHERE id=$2", [await passwordHash(input.password), reset.rows[0].user_id]);
+      await db.query("UPDATE password_reset_tokens SET used_at=now() WHERE id=$1", [reset.rows[0].id]);
+      await db.query("UPDATE sessions SET revoked_at=now() WHERE user_id=$1", [reset.rows[0].user_id]);
+      await db.query("COMMIT");
+    } catch (error) {
+      await db.query("ROLLBACK");
+      throw error;
+    }
+    return json({ ok: true });
   }
   if (path === "/api/auth/logout" && request.method === "POST") {
     const token = request.headers.get("Cookie")?.match(/(?:^|;\s*)bj_session=([^;]+)/)?.[1];
@@ -100,6 +198,11 @@ async function auth(request, env, db, path) {
 }
 
 async function api(request, env, db, user, path) {
+  if (path === "/api/admin" && request.method === "GET") {
+    const denied = requireRole(user, "ADMIN");
+    if (denied) return denied;
+    return json({ ok: true, email: user.email, roles: user.roles });
+  }
   if (path === "/api/me" && request.method === "GET") {
     if (!user) return json({ error: "Authentication required" }, 401);
     return json({ id: user.id, email: user.email, displayName: user.display_name, roles: user.roles, onboardingPath: user.onboarding_path });
@@ -268,23 +371,22 @@ async function api(request, env, db, user, path) {
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
+    if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }), env);
     const url = new URL(request.url);
     const path = url.pathname;
-    if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
       return cors(request, await withDb(env, async (db) => {
-        if (path === "/api/readyz") {
+        if ((path === "/healthz" || path === "/api/healthz") && request.method === "GET") {
           await db.query("SELECT 1");
-          return json({ ok: true, database: "ready" });
+          return json({ ok: true, database: "connected" });
         }
         const user = await session(request, db);
         const authResponse = await auth(request, env, db, path);
         return authResponse || await api(request, env, db, user, path);
-      }));
+      }), env);
     } catch (error) {
       console.error("request failed", error.message);
-      return cors(request, json({ error: "Service unavailable" }, 503));
+      return cors(request, json({ error: "Internal server error" }, 500), env);
     }
   },
 };
