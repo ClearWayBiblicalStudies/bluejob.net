@@ -198,14 +198,13 @@ async function auth(request, env, db, path) {
 }
 
 async function api(request, env, db, user, path) {
+  if (path === "/api/admin" && request.method === "GET") {
+    const denied = requireRole(user, "ADMIN");
+    if (denied) return denied;
+    return json({ ok: true, email: user.email, roles: user.roles });
+  }
   if (path === "/api/me" && request.method === "GET") {
     if (!user) return json({ error: "Authentication required" }, 401);
-
-    if (path === "/api/admin" && request.method === "GET") {
-      const denied = requireRole(user, "ADMIN");
-      if (denied) return denied;
-      return json({ ok: true, email: user.email, roles: user.roles });
-    }
     return json({ id: user.id, email: user.email, displayName: user.display_name, roles: user.roles, onboardingPath: user.onboarding_path });
   }
   if (!user) return json({ error: "Authentication required" }, 401);
