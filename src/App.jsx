@@ -8,7 +8,6 @@ import WorkerDashboard from './pages/WorkerDashboard';
 import ContractorDashboard from './pages/ContractorDashboard';
 import PostJobPage from './pages/PostJobPage';
 import BidDetailPage from './pages/BidDetailPage';
-import AdminDashboard from './pages/AdminDashboard';
 import AdminJobs from './pages/AdminJobs';
 import PassportPage from './pages/PassportPage';
 import PassportEditPage from './pages/PassportEditPage';

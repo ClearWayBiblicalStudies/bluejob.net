@@ -8,7 +8,7 @@ const steps = ['Scope', 'Details', 'Budget', 'Requirements', 'Review'];
 export default function PostJobPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
-  const [job, setJob] = useState({ title: '', description: '', trade: 'Electrical', location: '', budget_min: '', budget_max: '' });
+  const [job, setJob] = useState({ title: '', description: '', trade: 'Electrical', location: '', budget_min: '' });
   const navigate = useNavigate();
   const update = (event) => setJob({ ...job, [event.target.name]: event.target.value });
   const publish = async () => {
