@@ -1,0 +1,164 @@
+// server/src/bootstrapFounder.js
+// One-time secure founder bootstrap for BlueJob.
+// IMPORTANT: set FOUNDER_EMAIL and FOUNDER_TEMP_PASSWORD as Cloudflare runtime secrets.
+// Do not commit the actual password into this file.
+
+export async function bootstrapFounder({ db, hashPassword, env }) {
+  const email = String(env.FOUNDER_EMAIL || "").trim().toLowerCase();
+  const tempPassword = String(env.FOUNDER_TEMP_PASSWORD || "");
+
+  if (!email || !tempPassword) {
+    return { skipped: true, reason: "Founder bootstrap secrets not configured." };
+  }
+
+  if (tempPassword.length < 8) {
+    throw new Error("FOUNDER_TEMP_PASSWORD must be at least 8 characters.");
+  }
+
+  // Use the SAME password hashing function already used by BlueJob login.
+  const passwordHash = await hashPassword(tempPassword);
+
+  await db.query("BEGIN");
+
+  try {
+    const existing = await db.query(
+      `SELECT id, email, role
+         FROM users
+        WHERE LOWER(email) = $1
+        LIMIT 1`,
+      [email]
+    );
+
+    let user;
+
+    if (existing.rows.length) {
+      const updated = await db.query(
+        `UPDATE users
+            SET password_hash = $1,
+                role = 'SUPER_ADMIN',
+                must_change_password = TRUE,
+                updated_at = NOW()
+          WHERE id = $2
+          RETURNING id, email, role, must_change_password`,
+        [passwordHash, existing.rows[0].id]
+      );
+
+      user = updated.rows[0];
+    } else {
+      const inserted = await db.query(
+        `INSERT INTO users (
+            email,
+            password_hash,
+            role,
+            must_change_password,
+            created_at,
+            updated_at
+         )
+         VALUES ($1, $2, 'SUPER_ADMIN', TRUE, NOW(), NOW())
+         RETURNING id, email, role, must_change_password`,
+        [email, passwordHash]
+      );
+
+      user = inserted.rows[0];
+    }
+
+    // Revoke any old sessions for this account so the temporary credential
+    // starts from a clean session state.
+    await db.query(
+      `DELETE FROM sessions WHERE user_id = $1`,
+      [user.id]
+    );
+
+    await db.query("COMMIT");
+
+    return {
+      success: true,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.must_change_password
+    };
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  }
+}
+
+
+
+BLUEJOB FOUNDER BOOTSTRAP — IMPLEMENTATION
+
+1. Save the JS file as:
+   server/src/bootstrapFounder.js
+
+2. In the EXISTING server/Worker startup, import it and call it using the EXISTING:
+   - database client
+   - password hash function
+   - Cloudflare env object
+
+Example wiring:
+
+import { bootstrapFounder } from "./bootstrapFounder.js";
+import { hashPassword } from "./auth/password.js"; // use your existing path/function
+
+await bootstrapFounder({
+  db,
+  hashPassword,
+  env
+});
+
+3. Add/verify this database column once:
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+
+4. Your login handler must enforce the first-login password change:
+
+After validating email/password and creating the user's secure session:
+
+if (user.must_change_password) {
+  return json({
+    success: true,
+    mustChangePassword: true,
+    redirect: "/change-password"
+  });
+}
+
+5. Your change-password endpoint must:
+   - require a valid logged-in session
+   - hash the new password using the existing hashPassword()
+   - update password_hash
+   - set must_change_password = FALSE
+   - revoke all OTHER sessions for that user
+   - keep/create only the current fresh session
+   - never accept a user_id from the browser as trusted identity
+
+Example SQL:
+
+UPDATE users
+SET password_hash = $1,
+    must_change_password = FALSE,
+    updated_at = NOW()
+WHERE id = $2;
+
+6. Configure these as CLOUDFLARE RUNTIME SECRETS, not GitHub source code:
+
+FOUNDER_EMAIL
+FOUNDER_TEMP_PASSWORD
+
+Set FOUNDER_EMAIL to the founder email already specified.
+Set FOUNDER_TEMP_PASSWORD to the temporary password already specified.
+
+7. After the founder successfully logs in and changes the password:
+   DELETE the FOUNDER_TEMP_PASSWORD secret and redeploy.
+   Otherwise a future deployment could reset the password back to the temporary one.
+
+8. SECURITY TEST:
+   - founder login works
+   - forced change-password screen appears
+   - temporary password fails after change
+   - /api/me returns founder only for founder session
+   - normal user gets their own account
+   - normal user gets 403 on /api/admin/*
+   - no localStorage auth
+   - no plaintext password committed
