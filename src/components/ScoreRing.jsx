@@ -1,4 +1,4 @@
-export default function ScoreRing({ score = 846, label = 'Excellent', change = 12 }) {
+export default function ScoreRing({ score = null, label = 'UNRATED', change = null }) {
   const pct = Math.max(0, Math.min(100, ((score - 300) / 600) * 100));
   return (
     <div className="score-ring-wrap">
