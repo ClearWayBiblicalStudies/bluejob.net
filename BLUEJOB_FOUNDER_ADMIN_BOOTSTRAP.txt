@@ -1,0 +1,64 @@
+BLUEJOB — FOUNDER ADMIN LOGIN BOOTSTRAP
+
+Use the existing BlueJob authentication, user, role, session, MFA, and password-hashing systems.
+
+Create/verify the founder admin account with:
+
+EMAIL:
+director@clearestway.org
+
+TEMPORARY PASSWORD:
+final pass11
+
+ROLE:
+SUPER_ADMIN
+
+IMPORTANT SECURITY RULES:
+- DO NOT hard-code the plaintext password in frontend code.
+- DO NOT commit the plaintext password to GitHub.
+- DO NOT store the plaintext password in the database.
+- Hash the temporary password using the SAME production password-hashing function already used by BlueJob login.
+- If the repository already has a founder/admin bootstrap migration or script, use it instead of creating a competing auth path.
+- Prefer supplying the temporary password through a one-time Cloudflare secret / secure bootstrap environment value, then remove it after successful bootstrap.
+- Normalize the email exactly the same way the current login flow does.
+- Ensure the account is unique by normalized email.
+- Set server-side role to SUPER_ADMIN.
+- Mark the account as requiring password change on first successful login.
+- If MFA is supported for SUPER_ADMIN, route the founder through MFA setup immediately after the password change.
+- Do not auto-login this account for any visitor.
+- Do not use this account as a fallback session.
+- Normal users must never inherit this account's identity, role, session, profile, jobs, or data.
+
+FIRST LOGIN FLOW:
+1. User enters director@clearestway.org
+2. User enters temporary password: final pass11
+3. Backend authenticates that exact account.
+4. Backend creates a unique secure session for that account only.
+5. Redirect to forced password-change screen.
+6. Require a new password before normal admin/dashboard access.
+7. After password change, invalidate the temporary password and revoke any prior bootstrap session if appropriate.
+8. If MFA is supported/enforced, require MFA setup next.
+9. Then load the founder's own account through GET /api/me.
+
+VERIFY:
+PASS - founder account exists exactly once
+PASS - role = SUPER_ADMIN
+PASS - login works with temporary password
+PASS - first login forces password change
+PASS - after password change, temporary password no longer works
+PASS - normal user login never opens founder account
+PASS - founder session never leaks to another browser/user
+PASS - /api/me returns founder only when founder session is valid
+PASS - admin routes return 403 for non-admin users
+PASS - no plaintext password exists in committed source, logs, HTML, or frontend bundle
+
+FINAL REPORT:
+FOUNDER ACCOUNT: PASS/FAIL
+FOUNDER EMAIL: director@clearestway.org
+ROLE: SUPER_ADMIN
+TEMP PASSWORD LOGIN: PASS/FAIL
+FORCED PASSWORD CHANGE: PASS/FAIL
+MFA SETUP/ENFORCEMENT: PASS/FAIL or NOT CONFIGURED
+SESSION ISOLATION: PASS/FAIL
+PLAINTEXT PASSWORD IN REPO: NO
+HUMAN ACTION REQUIRED: <NONE or exact secure action>
