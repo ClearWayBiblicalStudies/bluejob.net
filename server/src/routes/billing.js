@@ -25,7 +25,9 @@ router.post('/webhook', async (req,res) => {
     const subscription=event.data.object;
     const status=subscription.status==='active'||subscription.status==='trialing' ? (subscription.status==='trialing'?'TRIAL':'ACTIVE') : subscription.status==='past_due'?'PAST_DUE':'CANCELED';
     await pool.query(`UPDATE memberships SET status=$1,updated_at=now() WHERE stripe_subscription_id=$2`,[status,subscription.id]);
-    await pool.query(`UPDATE users SET membership_status=$1,membership_expires_at=to_timestamp($2) WHERE stripe_subscription_id=$3 OR stripe_customer_id=$4`,[status,subscription.current_period_end || 0,subscription.id,subscription.customer]);
+    await pool.query(`UPDATE users SET membership_status=$1,membership_expires_at=to_timestamp($2)
+      WHERE id=(SELECT user_id FROM memberships WHERE stripe_subscription_id=$3 OR stripe_customer_id=$4)`,
+      [status,subscription.current_period_end || 0,subscription.id,subscription.customer]);
   }
   res.json({received:true});
 });
