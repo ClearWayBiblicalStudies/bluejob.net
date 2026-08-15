@@ -1,26 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell';
-
-const projects = [
-  ['Office Building Electrical','Tampa, FL','Bidding','12 Bids'],
-  ['Warehouse Concrete','Lakeland, FL','In Progress','4 Bids'],
-  ['Retail Renovation','Orlando, FL','Bidding','9 Bids'],
-];
-
+import RatingGate from '../components/RatingGate';
+import { api } from '../lib/api';
 export default function ContractorDashboard() {
-  return (
-    <AppShell role="contractor">
-      <div className="page-heading"><div><h1>Contractor Dashboard</h1><p>Manage your projects and build your subcontractor network.</p></div><Link to="/app/post-job" className="button button-primary">+ Post Job</Link></div>
-      <section className="stat-row">
-        <div className="card stat-card"><span>Active Projects</span><strong>8</strong><Link to="/app/contractor#projects">View all</Link></div>
-        <div className="card stat-card"><span>Bids Received</span><strong>27</strong><Link to="/app/contractor#bids">View all</Link></div>
-        <div className="card stat-card"><span>Project Coverage</span><strong className="green-text">72%</strong><small>Across 8 projects</small></div>
-        <div className="card stat-card"><span>Contractor Work Score</span><strong>782</strong><small className="green-text">Good · ↑ 8 this month</small></div>
-      </section>
-      <div className="contractor-columns">
-        <section className="card project-table-card"><div className="section-heading"><h2>Recent Projects</h2><Link to="/app/contractor#projects">View all</Link></div>{projects.map(([name,loc,status,bids],i)=><div className="project-row" key={name}><div><strong>{name}</strong><span>{loc}</span></div><span className="status-chip">{status}</span><Link to={`/app/jobs/${i+1}/bids`}>{bids}</Link></div>)}</section>
-        <aside className="action-stack"><div className="card action-card"><span className="kicker">POST A JOB</span><h3>Get matched with qualified subcontractors.</h3><p>Set your scope and budget, then let BlueJob organize the response.</p><Link to="/app/post-job" className="button button-primary button-full">Post New Job</Link></div><div className="card action-card"><span className="kicker">GROW YOUR SUB NETWORK</span><h3>Keep strong subcontractors close.</h3><p>Save and organize the people you want to work with again.</p><button className="button button-outline button-full">Invite Subcontractors</button></div></aside>
-      </div>
-    </AppShell>
-  );
+  const [jobs, setJobs] = useState([]); const [pending, setPending] = useState([]);
+  useEffect(() => { api.jobs().then(({ jobs: value }) => setJobs(value)).catch(() => {}); api.pendingRatings().then(({ pending: value }) => setPending(value)).catch(() => {}); }, []);
+  return <AppShell role="contractor"><div className="page-heading"><div><h1>Contractor Dashboard</h1><p>Manage real projects and subcontractor responses.</p></div><Link to="/app/post-job" className="button button-primary">Post Job</Link></div>{pending[0] && <RatingGate job={pending[0]} onStartRating={() => window.location.assign(`/app/jobs/${pending[0].id}/rating`)} />}<section className="jobs-grid">{jobs.length ? jobs.map((job) => <article className="card job-card" key={job.id}><h3>{job.title}</h3><p>{job.location}</p><strong>${Number(job.budget).toLocaleString()}</strong><span>{job.bid_count} real bids</span></article>) : <div className="card empty-state"><strong>No active jobs yet</strong><span>Post a job with a required budget to begin.</span></div>}</section></AppShell>;
 }

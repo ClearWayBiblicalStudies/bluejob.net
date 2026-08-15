@@ -55,7 +55,10 @@ router.get('/settings', requireAuth, async (req, res) => {
   rows[0] ? res.json({ settings: rows[0] }) : res.status(404).json({ error: 'User not found' });
 });
 router.get('/me', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT id,name,email,role,organization_id FROM users WHERE id=$1', [req.user.sub]);
+  const { rows } = await pool.query(`SELECT u.id,u.name,u.email,u.role,u.organization_id,u.work_score,u.work_score_rating_count,
+    (SELECT count(*)::int FROM jobs j LEFT JOIN bids b ON b.job_id=j.id AND b.status='ACCEPTED' WHERE j.status='COMPLETED' AND (j.owner_id=u.id OR b.bidder_id=u.id)) AS completed_jobs,
+    (SELECT COALESCE(sum(j.budget),0) FROM jobs j LEFT JOIN bids b ON b.job_id=j.id AND b.status='ACCEPTED' WHERE j.status='COMPLETED' AND (j.owner_id=u.id OR b.bidder_id=u.id)) AS verified_work_value
+    FROM users u WHERE u.id=$1`, [req.user.sub]);
   rows[0] ? res.json({ user: rows[0] }) : res.status(401).json({ error: 'User not found' });
 });
 export default router;

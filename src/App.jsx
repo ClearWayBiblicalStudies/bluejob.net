@@ -9,16 +9,18 @@ import ContractorDashboard from './pages/ContractorDashboard';
 import PostJobPage from './pages/PostJobPage';
 import BidDetailPage from './pages/BidDetailPage';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminJobs from './pages/AdminJobs';
 import PassportPage from './pages/PassportPage';
 import PassportEditPage from './pages/PassportEditPage';
 import VerificationPage from './pages/VerificationPage';
 import AccountSecurityPage from './pages/AccountSecurityPage';
+import RatingPage from './pages/RatingPage';
 import { api } from './lib/api';
 
 function AdminRoute() {
   const [allowed, setAllowed] = React.useState(null);
-  React.useEffect(() => { api.me().then(({ user }) => setAllowed(user.role === 'SUPER_ADMIN')).catch(() => setAllowed(false)); }, []);
-  return allowed ? <AdminDashboard /> : allowed === false ? <Navigate to="/signin" replace /> : null;
+  React.useEffect(() => { api.me().then(({ user }) => setAllowed(['ADMIN','SUPER_ADMIN'].includes(user.role))).catch(() => setAllowed(false)); }, []);
+  return allowed ? <AdminJobs /> : allowed === false ? <Navigate to="/signin" replace /> : null;
 }
 
 export default function App() {
@@ -36,6 +38,7 @@ export default function App() {
       <Route path="/app/contractor" element={<ContractorDashboard />} />
       <Route path="/app/post-job" element={<PostJobPage />} />
       <Route path="/app/jobs/:jobId/bids" element={<BidDetailPage />} />
+      <Route path="/app/jobs/:jobId/rating" element={<RatingPage />} />
       <Route path="/app/admin" element={<AdminRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
