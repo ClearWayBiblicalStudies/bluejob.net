@@ -35,8 +35,8 @@ router.post('/jobs', async (req, res) => {
   res.status(201).json({ job: rows[0] });
 });
 router.delete('/jobs/:jobId', async (req, res) => {
-  const { rows } = await pool.query('DELETE FROM jobs WHERE id=$1 RETURNING id,title', [req.params.jobId]);
-  if (!rows[0]) return res.status(404).json({ error: 'Job not found' });
+  const { rows } = await pool.query("DELETE FROM jobs WHERE id=$1 AND status='OPEN' RETURNING id,title", [req.params.jobId]);
+  if (!rows[0]) return res.status(409).json({ error: 'Only open jobs can be deleted' });
   await audit(req.user.sub, 'DELETE_JOB', 'job', rows[0].id, { title: rows[0].title });
   res.json({ success: true });
 });

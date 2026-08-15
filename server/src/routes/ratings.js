@@ -15,7 +15,7 @@ async function pendingFor(userId) {
      AND NOT EXISTS (SELECT 1 FROM job_ratings r WHERE r.job_id=j.id AND r.rated_by_user_id=$1)`, [userId]
   );
 }
-router.get('/pending', async (req, res) => {
+router.get('/ratings/pending', async (req, res) => {
   const { rows } = await pendingFor(req.user.sub);
   res.json({ pending: rows });
 });

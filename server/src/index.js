@@ -24,7 +24,7 @@ app.get('/api/readyz', async (_, res) => {
 });
 app.use('/api/auth', auth); app.use('/api/verification', verification);
 app.use('/api/jobs', jobs); app.use('/api/billing', billing);
-app.use('/api/ratings', ratings);
+app.use('/api', ratings);
 app.use('/api/passport', passport); app.use('/api/admin', admin);
 app.get('/api/readiness', async (_, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, database: 'up' }); }
