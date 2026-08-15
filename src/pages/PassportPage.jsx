@@ -16,7 +16,7 @@ export default function PassportPage() {
   return (
     <AppShell role="worker" user={{ initials: displayName.slice(0, 2).toUpperCase(), name: displayName }}>
       <div className="page-heading">
-        <div><span className="kicker">PUBLIC PROFESSIONAL RECORD</span><h1>Work Passport</h1><p>Show the professional record. Keep private documents private.</p></div>
+        <div><span className="kicker">PROFESSIONAL RECORD</span><h1>Professional Profile</h1><p>Show the professional record. Keep private documents private.</p></div>
         <Link to="/app/passport/edit" className="button button-primary"><Edit3 size={15}/> Edit Passport</Link>
       </div>
       <section className="passport-hero card">

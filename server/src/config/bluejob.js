@@ -1,0 +1,8 @@
+export const BLUEJOB = Object.freeze({
+  BRAND_NAME: 'BLUEJOB',
+  SCORE_NAME: 'My Work Score',
+  SCORE_MIN: 300,
+  SCORE_MAX: 900,
+  FOUNDING_MONTHLY_PRICE: 15.99,
+  FOUNDING_MONTHLY_PRICE_LABEL: '$15.99/month'
+});

@@ -8,11 +8,12 @@ const steps = ['Scope', 'Details', 'Budget', 'Requirements', 'Review'];
 export default function PostJobPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
-  const [job, setJob] = useState({ title: 'Office Building Electrical', description: 'Electrical installation for a 3-story office building including power distribution, lighting and data cabling.', trade: 'Electrical', location: 'Tampa, FL', budget_min: 48000, budget_max: 55000 });
+  const [job, setJob] = useState({ title: '', description: '', trade: 'Electrical', location: '', budget_min: '' });
   const navigate = useNavigate();
   const update = (event) => setJob({ ...job, [event.target.name]: event.target.value });
   const publish = async () => {
-    try { const { job: created } = await api.createJob(job); navigate(`/app/jobs/${created.id}/bids`); }
+    if (!Number(job.budget_min) || Number(job.budget_min) <= 0) return setError('A positive budget is required.');
+    try { const { job: created } = await api.createJob({ ...job, budget: job.budget_min }); navigate(`/app/jobs/${created.id}/bids`); }
     catch (err) { setError(err.message); }
   };
   return <AppShell role="contractor"><div className="page-heading"><div><h1>Post a New Job</h1><p>Tell BlueJob exactly what you need.</p></div></div>

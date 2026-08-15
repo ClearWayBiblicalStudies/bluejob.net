@@ -32,4 +32,9 @@ export const api = {
   updateJobStatus: (id, status) => request(`/jobs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   bids: (id) => request(`/jobs/${id}/bids`),
   submitBid: (id, body) => request(`/jobs/${id}/bids`, { method: 'POST', body: JSON.stringify(body) }),
+  pendingRatings: () => request('/ratings/pending'),
+  adminJobs: () => request('/admin/jobs'),
+  createAdminJob: (body) => request('/admin/jobs', { method: 'POST', body: JSON.stringify(body) }),
+  deleteAdminJob: (id) => request(`/admin/jobs/${id}`, { method: 'DELETE' }),
+  rateJob: (id, body) => request(`/jobs/${id}/rating`, { method: 'POST', body: JSON.stringify(body) }),
 };
