@@ -1,0 +1,499 @@
+BLUEJOB — INSTALL THIS PACKAGE INTO THE EXISTING REPOSITORY
+
+You are working inside the existing BlueJob repository. Do NOT create a second app, second backend, second database, or parallel implementation.
+
+GOAL
+Integrate the supplied BlueJob package into the CURRENT production codebase so the existing app continues working and the new functionality is connected correctly.
+
+IMPORTANT RULES
+- Inspect the repository before changing anything.
+- Preserve all working production code.
+- Do not blindly overwrite files.
+- If a target file already exists, MERGE the supplied logic into it.
+- Do not create duplicate routes, duplicate middleware, duplicate database clients, duplicate Stripe handlers, or duplicate auth systems.
+- Use the existing PostgreSQL/Hyperdrive database connection.
+- Use the existing authentication/session system.
+- Use the existing Stripe subscription system.
+- Keep the existing Cloudflare Worker architecture.
+- Do not use D1.
+- Do not delete production data.
+- Remove demo/fake data only after the real admin workflow is confirmed working.
+- Run tests/build checks after each logical phase.
+- Commit everything to ONE implementation branch and create ONE PR to main.
+
+PACKAGE FILE PLACEMENT
+
+1. SAVE:
+server/src/config/bluejob.js
+
+PURPOSE:
+Central BlueJob product constants:
+- brand name
+- My Work Score
+- 300–900 score range
+- $15.99 founding price
+
+If a config file already exists, merge these constants into the current config system instead of creating conflicting configuration.
+
+2. SAVE:
+server/migrations/004_work_score_ratings.sql
+
+PURPOSE:
+Mandatory mutual ratings + Work Score database fields.
+
+BEFORE RUNNING:
+Inspect the actual schema for:
+- users.id
+- jobs.id
+- jobs.gc_user_id
+- jobs.subcontractor_user_id
+
+If IDs are UUID, convert the supplied BIGINT columns to UUID before migration.
+Do not run the migration until the SQL matches the existing schema.
+
+3. SAVE:
+server/migrations/005_membership_admin.sql
+
+PURPOSE:
+Adds:
+- membership entitlement fields
+- Stripe customer/subscription references if not already present
+- admin audit log
+
+MERGE RULE:
+If the existing schema already has subscription/customer/admin fields, reuse the existing columns and modify this migration so it only adds what is missing.
+Do not create competing subscription fields.
+
+4. SAVE:
+server/src/services/workScore.js
+
+PURPOSE:
+Single authoritative Work Score calculation.
+
+CONNECT IT TO:
+- completed BlueJob jobs
+- verified post-job ratings
+- users.work_score
+- users.work_score_rating_count
+
+DO NOT:
+- manufacture starting scores
+- assign fake founder scores
+- directly add dollars earned as score points
+
+Verified Work Value must remain a separate metric.
+
+5. SAVE:
+server/src/middleware/requireRatingClearance.js
+
+PURPOSE:
+After a job is completed, the GC and subcontractor must each submit their required evaluation before they may:
+- post another job
+- accept another job
+- submit interest/match on another job
+- start another marketplace transaction
+
+DO NOT BLOCK:
+- login
+- logout
+- password reset
+- payment
+- support
+- dispute resolution
+- the required rating page itself
+
+6. SAVE:
+server/src/middleware/requireActiveMembership.js
+
+PURPOSE:
+Server-side membership enforcement.
+
+CONNECT TO:
+the existing Stripe webhook/subscription system.
+
+RULE:
+Frontend navigation must NEVER be enough to unlock BlueJob.
+Marketplace access requires an active entitlement in the database.
+
+Accepted active states may include:
+ACTIVE
+TRIAL
+COMPED
+
+Do not require membership for:
+- public landing page
+- login
+- signup
+- password reset
+- checkout
+- Stripe webhooks
+- legal pages
+
+7. SAVE:
+server/src/routes/ratings.js
+
+PURPOSE:
+Registers:
+GET /api/ratings/pending
+POST /api/jobs/:jobId/rating
+
+MERGE THIS INTO THE EXISTING ROUTER/WORKER STYLE.
+If the Worker does not use Express, translate these handlers into the repository's current request-routing architecture.
+
+The questions must remain structured and mandatory.
+
+8. SAVE:
+server/src/routes/admin.js
+
+PURPOSE:
+Real server-side admin job management.
+
+ADMIN SECURITY:
+Use the CURRENT server-side role system.
+SUPER_ADMIN / ADMIN must be verified by the backend/session.
+Do not rely on frontend email checks.
+
+ADMIN MUST BE ABLE TO:
+- view real jobs
+- publish real jobs
+- delete fake/invalid jobs
+- manage the actual marketplace
+
+Every sensitive manual action should be written to admin_audit_log.
+
+9. SAVE:
+server/src/routes/public.js
+
+PURPOSE:
+Public production endpoints.
+
+REGISTER:
+GET /healthz
+GET /api/public/platform
+
+/healthz MUST:
+- be public
+- actually query the production DB with SELECT 1
+- return database connected/unavailable
+- never require authentication
+
+10. SAVE:
+src/components/BlueJobHeader.jsx
+
+PURPOSE:
+Make BLUEJOB the dominant primary header.
+
+REPLACE/MERGE:
+Any tiny existing BlueJob mark/header should be replaced with this larger brand presentation while preserving existing navigation behavior.
+
+11. SAVE:
+src/components/WorkScoreCard.jsx
+
+PURPOSE:
+Consumer-facing reputation component.
+
+REMOVE CONSUMER-FACING USE OF:
+Work Passport
+
+USE:
+My Work Score
+
+NEW USERS:
+show UNRATED until real qualifying work/ratings exist.
+
+DISPLAY SEPARATELY:
+- Work Score
+- Verified Work Value
+- Completed Jobs
+- rating count
+
+12. SAVE:
+src/components/RatingGate.jsx
+
+PURPOSE:
+Mandatory UI lock when /api/ratings/pending returns an outstanding rating.
+
+When an outstanding rating exists:
+show the required rating experience before marketplace actions.
+
+13. SAVE:
+src/components/FoundingPrice.jsx
+
+PURPOSE:
+Display:
+$15.99/month
+Founding Member Price
+
+Connect this to the real Stripe checkout CTA.
+Do not make this component grant access by itself.
+
+14. SAVE:
+src/pages/LandingPage.jsx
+
+PURPOSE:
+This must be what every new visitor understands BEFORE entering the marketplace.
+
+CORE MESSAGE:
+BlueJob is a structured match system for GCs and subcontractors.
+GCs post:
+- real scope
+- location
+- schedule
+- requirements
+- mandatory budget
+
+Subs do not chase phone numbers.
+BlueJob matches appropriate workers and jobs.
+
+Core positioning:
+"Know the budget. Match with the right people. Get to work."
+
+My Work Score is the long-term reputation asset.
+
+15. SAVE:
+src/pages/AdminJobs.jsx
+
+PURPOSE:
+Founder/admin page for publishing REAL work.
+
+CONNECT TO:
+GET /api/admin/jobs
+POST /api/admin/jobs
+DELETE /api/admin/jobs/:jobId
+
+Only authenticated ADMIN/SUPER_ADMIN users can access it.
+
+16. SAVE:
+src/styles/bluejob.css
+
+PURPOSE:
+Larger BlueJob branding and clean professional UI.
+
+MERGE INTO THE EXISTING STYLE SYSTEM.
+Do not destroy current responsive styling.
+If the repository already has global CSS/Tailwind/component styling, translate these styles into the current system instead of loading conflicting CSS.
+
+17. SAVE:
+docs/BLUEJOB_PRODUCT_RULES.md
+
+PURPOSE:
+Permanent product rules for future development.
+
+18. SAVE:
+docs/WORK_SCORE_SPEC.md
+
+PURPOSE:
+Permanent Work Score specification.
+
+19. SAVE:
+docs/LAUNCH_CHECKLIST.md
+
+PURPOSE:
+Production launch gate.
+
+20. SAVE:
+docs/LEGAL_COPY_STARTER.md
+
+PURPOSE:
+Starter product/legal copy only.
+Do not represent it as attorney-approved legal advice.
+
+21. MERGE:
+.env.production.example.additions
+
+INTO THE EXISTING:
+production environment example file.
+
+DO NOT CREATE A COMPETING ENV CONTRACT.
+
+Keep/verify variables for:
+APP_ORIGIN
+JWT_SECRET
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_ID
+RESEND_API_KEY
+PASSWORD_RESET_FROM
+
+Never put real secrets into GitHub.
+
+ROUTER INTEGRATION
+
+After placing the files, inspect the existing production Worker/router and register the new functionality in the EXISTING entrypoint.
+
+Order public routes BEFORE authenticated catch-all logic:
+- /healthz
+- public platform config
+- signup
+- login
+- forgot password
+- reset password
+- Stripe webhook
+
+Then authenticated routes.
+
+Apply membership + rating clearance to marketplace actions only.
+
+Example policy:
+
+PUBLIC:
+GET /
+GET /healthz
+GET /api/public/platform
+POST /api/auth/signup
+POST /api/auth/login
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+POST /api/stripe/webhook
+
+AUTHENTICATED BUT NOT MEMBERSHIP-GATED:
+POST /api/auth/logout
+GET /api/me
+GET /api/ratings/pending
+POST /api/jobs/:jobId/rating
+support/dispute/payment management routes
+
+ACTIVE MEMBERSHIP + RATING CLEARANCE:
+POST new job
+POST interest/match/accept
+other new marketplace activity
+
+ADMIN:
+all /api/admin/* routes require server-side ADMIN or SUPER_ADMIN.
+
+REMOVE DEMO/Fake DATA
+
+Search production frontend/backend/seeds for:
+- Commercial Metal Framing
+- Interior Buildout Crew
+- fabricated bid counts
+- fabricated matches
+- fabricated 846 Work Score
+- fabricated 92% Work Passport
+- any hard-coded demo earnings
+- any hard-coded example user account presented as real
+
+Do not delete real user/job records.
+
+Replace empty production states with honest UI:
+"No active jobs yet"
+"UNRATED"
+"0 completed jobs"
+"$0 verified work value"
+
+ADMIN BOOTSTRAP
+
+Inspect the existing admin migration/bootstrap system.
+Ensure the founder/admin account exists through the EXISTING secure bootstrap process.
+
+Do NOT hard-code a production password.
+Do NOT expose admin credentials in source code.
+Use password setup/reset flow.
+Require MFA if the current admin security design supports it.
+
+STRIPE / $15.99 MEMBERSHIP
+
+Inspect the current Stripe checkout + webhook code.
+
+Verify:
+1. Checkout uses the actual production Price ID.
+2. Successful subscription webhook maps Stripe customer/subscription to the correct BlueJob user.
+3. Webhook sets membership_status=ACTIVE.
+4. Cancellation/past-due events update membership status.
+5. Users cannot bypass payment by clicking I Need Work / I Need To Hire or directly typing dashboard URLs.
+
+END-TO-END TEST
+
+Do not call this complete until these pass:
+
+PUBLIC WEBSITE
+PASS - homepage loads
+PASS - large BLUEJOB brand visible
+PASS - $15.99 founding price visible
+PASS - explanation of budget-first matching
+PASS - no fake jobs/scores shown as real
+
+AUTH
+PASS - signup
+PASS - login
+PASS - logout
+PASS - password reset route remains available
+
+PAYMENT
+PASS - checkout
+PASS - webhook
+PASS - membership database entitlement
+PASS - paid access cannot be bypassed
+
+ADMIN
+PASS - founder/admin role recognized server-side
+PASS - admin can create real job
+PASS - admin can delete job
+PASS - non-admin gets 403
+
+MATCHING
+PASS - GC cannot publish without budget
+PASS - sub can express interest/match according to current BlueJob flow
+PASS - marketplace blocked without membership
+
+WORK SCORE
+PASS - new account displays UNRATED
+PASS - completed job creates rating obligation for BOTH sides
+PASS - user cannot start/post/accept new work while rating is outstanding
+PASS - required rating submission succeeds
+PASS - rating recalculates Work Score
+PASS - Work Passport terminology removed from consumer UI
+
+HEALTH
+PASS - /healthz is public
+PASS - DB query succeeds
+
+FINAL OUTPUT
+
+Return a concise implementation report:
+
+FILES CREATED:
+<exact paths>
+
+FILES MERGED/MODIFIED:
+<exact paths>
+
+MIGRATIONS:
+PASS/FAIL + exact migration names
+
+AUTH:
+PASS/FAIL
+
+STRIPE MEMBERSHIP:
+PASS/FAIL
+
+ADMIN:
+PASS/FAIL
+
+BUDGET-FIRST JOB POST:
+PASS/FAIL
+
+MANDATORY MUTUAL RATINGS:
+PASS/FAIL
+
+MY WORK SCORE:
+PASS/FAIL
+
+DEMO DATA REMOVED:
+PASS/FAIL
+
+HEALTHZ:
+PASS/FAIL
+
+BUILD/TEST:
+PASS/FAIL
+
+PR:
+#<number>
+
+HUMAN ACTION REQUIRED:
+NONE
+or one exact action that cannot be safely completed from the repository.
+
+DO NOT STOP WITH A PLAN.
+ACTUALLY PLACE, MERGE, CONNECT, TEST, COMMIT, AND OPEN THE PR.
