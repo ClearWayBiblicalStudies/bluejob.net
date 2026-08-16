@@ -333,3 +333,131 @@ loadDashboard();
 </script>
 </body>
 </html>
+
+<style id="bluejob-final-light-fix">
+
+/* ===== BLUEJOB FINAL LIGHT THEME ===== */
+
+html, body {
+  background: #ffffff !important;
+  color: #10213a !important;
+}
+
+/* DEFAULT TEXT */
+h1, h2, h3, h4, h5, h6,
+strong, b {
+  color: #10213a !important;
+}
+
+p, li, td, th, label, span {
+  text-shadow: none !important;
+}
+
+/* WORK SCORE NUMBER */
+.score-number,
+.work-score-number,
+.score-value,
+.score-ring .score,
+.score-ring strong {
+  color: #10213a !important;
+  opacity: 1 !important;
+}
+
+/* SCORE BREAKDOWN CARDS */
+.score-card,
+.score-factor,
+.factor,
+.metric-card,
+.stat-card {
+  background: #ffffff !important;
+  color: #10213a !important;
+}
+
+.score-card h3,
+.score-card h4,
+.score-factor h3,
+.score-factor h4,
+.factor h3,
+.factor h4,
+.metric-card h3,
+.stat-card h3 {
+  color: #10213a !important;
+  opacity: 1 !important;
+}
+
+.score-card p,
+.score-factor p,
+.factor p,
+.metric-card p,
+.stat-card p {
+  color: #6b7a90 !important;
+  opacity: 1 !important;
+}
+
+/* PASSPORT / PROFILE PANEL */
+.passport,
+.passport-card,
+.work-passport,
+.profile-card {
+  background: #ffffff !important;
+  color: #10213a !important;
+}
+
+.passport *,
+.passport-card *,
+.work-passport *,
+.profile-card * {
+  opacity: 1;
+}
+
+/* METRIC LABELS */
+.metric-label,
+.stat-label {
+  color: #71819a !important;
+}
+
+/* TABLE */
+table,
+thead,
+tbody,
+tr,
+td,
+th {
+  color: #10213a !important;
+}
+
+thead th {
+  color: #667791 !important;
+}
+
+/* KEEP BUTTON TEXT WHITE */
+.btn-primary,
+.btn-primary *,
+button.primary,
+button.primary * {
+  color: #ffffff !important;
+}
+
+/* SECONDARY TEXT */
+.muted,
+.subtitle,
+.description {
+  color: #6b7a90 !important;
+}
+
+/* BLUE ACCENTS */
+a {
+  color: #1478ff;
+}
+
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.body.innerHTML = document.body.innerHTML
+    .replaceAll("Your Work Passport", "Your Verified Work Score")
+    .replaceAll("WORK PASSPORT", "VERIFIED WORK SCORE")
+    .replaceAll("Work Passport", "Verified Work Score");
+});
+</script>
+
