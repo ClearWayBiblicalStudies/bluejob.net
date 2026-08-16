@@ -1,0 +1,14 @@
+name = "bluejob-net"
+main = "src/worker.js"
+compatibility_date = "2026-08-11"
+
+[assets]
+directory = "./src"
+
+[[services]]
+binding = "API"
+service = "bluejob-api"
+
+[[routes]]
+pattern = "bluejob.net/*"
+custom_domain = true
