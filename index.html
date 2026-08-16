@@ -137,17 +137,99 @@ footer{border-top:1px solid var(--line);padding:50px 0 40px}
 .toast.show{transform:translateX(-50%) translateY(0)}
 @media(max-width:860px){.nav-links{display:none}.menu-btn{display:block}.nav-links.open{display:flex;position:absolute;top:64px;left:0;right:0;flex-direction:column;background:rgba(10,26,47,.98);padding:20px;gap:18px;border-bottom:1px solid var(--line)}.grid,.steps{grid-template-columns:1fr}.score-demo,.roles{grid-template-columns:1fr}.step::after{display:none}section{padding:60px 0}.hero{padding:80px 0 60px}.hero-stats{gap:24px}}
 </style>
+
+<style>
+html,body{
+  background:#ffffff !important;
+  color:#10213a !important;
+}
+
+body{
+  background:
+    radial-gradient(circle at 12% 18%, rgba(22,119,255,.10), transparent 22%),
+    radial-gradient(circle at 88% 30%, rgba(79,157,255,.10), transparent 24%),
+    linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
+}
+
+nav{
+  background:#ffffff !important;
+  border-bottom:1px solid #e2edf9 !important;
+  box-shadow:0 8px 24px rgba(20,80,150,.05) !important;
+}
+
+.logo img{
+  width:300px !important;
+  max-width:76vw !important;
+  height:auto !important;
+  display:block !important;
+  background:#ffffff !important;
+}
+
+.hero{
+  background:transparent !important;
+}
+
+.hero h1,
+.hero h2,
+.section-title,
+h1,h2,h3{
+  color:#10213a !important;
+}
+
+.hero p,
+p{
+  color:#5f6f86 !important;
+}
+
+.badge{
+  background:#eef6ff !important;
+  border:1px solid #cfe3ff !important;
+  color:#1677ff !important;
+}
+
+.btn-primary{
+  background:linear-gradient(135deg,#4f9dff 0%,#1677ff 55%,#0b63ce 100%) !important;
+  color:#ffffff !important;
+  border:none !important;
+  box-shadow:0 12px 28px rgba(22,119,255,.22) !important;
+}
+
+.btn-ghost{
+  background:#ffffff !important;
+  color:#17304f !important;
+  border:1px solid #bfd8f6 !important;
+}
+
+.card,
+.stat-card,
+.passport-card{
+  background:#ffffff !important;
+  border:1px solid #dceaf8 !important;
+  box-shadow:0 16px 40px rgba(20,80,150,.08) !important;
+}
+
+nav a:not(.btn){
+  color:#17304f !important;
+}
+
+footer{
+  background:#f7fbff !important;
+  color:#617189 !important;
+  border-top:1px solid #dceaf8 !important;
+}
+</style>
+
 </head>
 <body>
-<nav><div class="nav-in"><a href="#" class="logo"><img src="/bluejob-logo-workscore.png" alt="BlueJob" style="height:auto;width:260px;max-width:72vw;display:block"></a><div class="nav-links" id="navlinks"><a href="#passport">Work Passport</a><a href="#score">Work Score</a><a href="#how">How it works</a><a href="#dashboard">Dashboard</a><a href="/api/auth/login" class="btn btn-ghost">Log in</a><a href="/api/auth/register" class="btn btn-primary">Get started</a></div><button class="menu-btn" onclick="document.getElementById('navlinks').classList.toggle('open')">&#9776;</button></div></nav>
-<header class="hero"><div class="wrap"><span class="eyebrow">&#128737; The verified Work Passport</span><h1>Your work, <span class="g">verified and portable.</span><br>Every job builds your reputation.</h1><p class="lead">Bluejob gives every worker a portable Work Passport — a verified record of completed jobs, skills, and a real Work Score. Contractors hire with confidence. Workers own their record, forever.</p><div class="hero-cta"><a href="/api/auth/register" class="btn btn-primary btn-lg">Claim your Work Passport &#8594;</a><a href="#how" class="btn btn-ghost btn-lg">See how it works</a></div><div class="hero-stats"><div class="hero-stat"><div class="n" data-count="1247">0</div><div class="l">Verified workers</div></div><div class="hero-stat"><div class="n" data-count="3890">0</div><div class="l">Jobs completed</div></div><div class="hero-stat"><div class="n" data-count="98">0</div><div class="l">% dispute-free</div></div><div class="hero-stat"><div class="n" data-count="42">0</div><div class="l">Active contractors</div></div></div><div class="passport"><div class="passport-card"><div class="pc-top"><div><div class="pc-avatar">MJ</div></div><span class="pc-chip">Work Passport</span></div><div class="pc-name">Marcus James</div><div class="pc-role">Licensed Electrician &middot; Verified</div><div class="pc-score"><div><div class="val" id="pcScore">92</div><div class="lbl">Work Score</div></div><div style="text-align:right"><div class="val" style="font-size:24px">147</div><div class="lbl">Jobs done</div></div></div><div class="pc-bar"><div class="fill" id="pcBar" style="width:0"></div></div><div class="pc-meta"><span><b>San Diego, CA</b></span><span>MFA Verified</span></div></div></div></div></header>
+<nav><div class="nav-in"><a href="#" class="logo"><img src="/bluejob-logo-white.png" alt="BlueJob" style="height:auto;width:260px;max-width:72vw;display:block"></a><div class="nav-links" id="navlinks"><a href="#passport">Work Passport</a><a href="#score">Work Score</a><a href="#how">How it works</a><a href="#dashboard">Dashboard</a><a href="/api/auth/login" class="btn btn-ghost">Log in</a><a href="/api/auth/register" class="btn btn-primary">Get started</a></div><button class="menu-btn" onclick="document.getElementById('navlinks').classList.toggle('open')">&#9776;</button></div></nav>
+<header class="hero"><div class="wrap"><span class="eyebrow">&#128737; The verified Work Passport</span><h1>Your work, <span class="g">verified and portable.</span><br>Every job builds your reputation.</h1><p class="lead">Bluejob gives every worker a portable Work Passport — a verified record of completed jobs, skills, and a real Work Score. Contractors hire with confidence. Workers own their record, forever.</p><div class="hero-cta"><a href="/api/auth/register" class="btn btn-primary btn-lg">Get Your Work Score &#8594;</a><a href="#how" class="btn btn-ghost btn-lg">See how it works</a></div><div class="hero-stats"><div class="hero-stat"><div class="n" data-count="1247">0</div><div class="l">Verified workers</div></div><div class="hero-stat"><div class="n" data-count="3890">0</div><div class="l">Jobs completed</div></div><div class="hero-stat"><div class="n" data-count="98">0</div><div class="l">% dispute-free</div></div><div class="hero-stat"><div class="n" data-count="42">0</div><div class="l">Active contractors</div></div></div><div class="passport"><div class="passport-card"><div class="pc-top"><div><div class="pc-avatar">MJ</div></div><span class="pc-chip">Work Passport</span></div><div class="pc-name">Marcus James</div><div class="pc-role">Licensed Electrician &middot; Verified</div><div class="pc-score"><div><div class="val" id="pcScore">92</div><div class="lbl">Work Score</div></div><div style="text-align:right"><div class="val" style="font-size:24px">147</div><div class="lbl">Jobs done</div></div></div><div class="pc-bar"><div class="fill" id="pcBar" style="width:0"></div></div><div class="pc-meta"><span><b>San Diego, CA</b></span><span>MFA Verified</span></div></div></div></div></header>
 <section id="passport"><div class="wrap center"><span class="eyebrow">The Work Passport</span><h2>One identity. Every job. Yours forever.</h2><p class="lead">No more starting from zero. Your Work Passport travels with you across every contractor, every site, every job — carrying your verified history, skills, and reputation.</p><div class="grid"><div class="card"><div class="ic">&#128203;</div><h3>Verified job history</h3><p>Every completed job is cryptographically recorded to your passport. Contractors see real, tamper-proof proof of your work — not a PDF someone could fake.</p></div><div class="card"><div class="ic">&#127942;</div><h3>Real Work Score</h3><p>A transparent score built from completed jobs, completion rate, dispute record, and verification status. No black boxes — you can see exactly how you earned every point.</p></div><div class="card"><div class="ic">&#128272;</div><h3>You own it</h3><p>Your passport is yours, not your employer's. Switch contractors, change cities, take a break — your reputation comes with you. Always.</p></div></div></div></section>
 <section id="score" class="score-section"><div class="wrap"><div class="center"><span class="eyebrow">The Work Score</span><h2>A reputation you can actually explain.</h2><p class="lead">Not a mystery rating. The Bluejob Work Score is computed from real, verifiable signals — and every worker can see the exact math behind their number.</p></div><div class="score-demo"><div class="score-ring"><svg width="260" height="260" viewBox="0 0 260 260"><circle cx="130" cy="130" r="115" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="16"/><circle id="ringFill" cx="130" cy="130" r="115" fill="none" stroke="url(#sg)" stroke-width="16" stroke-linecap="round" stroke-dasharray="722" stroke-dashoffset="722"/><defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#4f9dff"/></linearGradient></defs></svg><div class="num"><div><div class="v" id="ringNum">0</div><div class="t">Work Score</div></div></div></div><div class="score-factors"><div class="factor"><div class="fi" style="background:rgba(52,211,153,.15)">&#9989;</div><div class="ft"><b>Completed jobs</b><span>+5 per finished job, up to +30</span></div><div class="fw" style="color:var(--green)">+30</div></div><div class="factor"><div class="fi" style="background:rgba(79,157,255,.15)">&#127919;</div><div class="ft"><b>Completion rate</b><span>On-time finish ratio &times; 20</span></div><div class="fw" style="color:var(--blue)">+19</div></div><div class="factor"><div class="fi" style="background:rgba(245,185,79,.15)">&#128737;</div><div class="ft"><b>Verification</b><span>+10 MFA verified, +10 identity verified</span></div><div class="fw" style="color:var(--gold)">+20</div></div><div class="factor"><div class="fi" style="background:rgba(52,211,153,.15)">&#9878;</div><div class="ft"><b>Dispute-free record</b><span>+15 if no active disputes</span></div><div class="fw" style="color:var(--green)">+15</div></div><div class="factor"><div class="fi" style="background:rgba(248,113,113,.15)">&#128197;</div><div class="ft"><b>Recency</b><span>Active in last 90 days: +6</span></div><div class="fw" style="color:var(--blue)">+6</div></div><div class="factor" style="border-color:rgba(79,157,255,.3);background:rgba(79,157,255,.06)"><div class="fi" style="background:rgba(79,157,255,.2)">&#931;</div><div class="ft"><b>Base + signals</b><span>50 base + earned points = total</span></div><div class="fw" style="color:#fff">92</div></div></div></div></div></section>
 <section id="how"><div class="wrap center"><span class="eyebrow">How it works</span><h2>From sign-up to verified in minutes.</h2><div class="steps"><div class="step"><h3>Create your passport</h3><p>Sign up as a worker or contractor. Add your trade, location, and credentials.</p></div><div class="step"><h3>Get verified</h3><p>Confirm your identity and enable MFA. Verification boosts your Work Score instantly.</p></div><div class="step"><h3>Work &amp; record</h3><p>Contractors post jobs. You complete them. Every finished job is logged to your passport.</p></div><div class="step"><h3>Build your score</h3><p>Your Work Score grows with every completed job. Take it anywhere. Own it forever.</p></div></div></div></section>
 <section style="padding-top:0"><div class="wrap center"><span class="eyebrow">Built for both sides</span><h2>Workers win. Contractors win.</h2><div class="roles"><div class="role-card"><span class="tag">For Workers</span><h3>Own your reputation</h3><p style="color:#aebfd8">Your Work Passport is a career asset that compounds with every job.</p><ul><li>Portable, verified job history — no more starting from zero</li><li>A transparent Work Score that opens doors to better pay</li><li>Identity &amp; MFA verification that contractors trust</li><li>Dispute protection with a fair, documented process</li></ul></div><div class="role-card"><span class="tag">For Contractors</span><h3>Hire with confidence</h3><p style="color:#aebfd8">See real proof before you hire. Cut time spent vetting and re-vetting.</p><ul><li>Verified worker passports with real Work Scores</li><li>Post jobs and match with qualified, vetted workers</li><li>Admin verification queue for compliance teams</li><li>Structured dispute resolution, all documented</li></ul></div></div></div></section>
 <section id="dashboard" class="dash"><div class="wrap center"><span class="eyebrow">Live dashboard</span><h2>See your Work Passport in action.</h2><p class="lead">This pulls real data from your Bluejob account. Log in to see your jobs, score, and passport.</p><div class="dash-toggle"><button class="btn btn-primary" onclick="showPanel('worker')" id="tab-worker">Worker view</button><button class="btn btn-ghost" onclick="showPanel('contractor')" id="tab-contractor">Contractor view</button></div><div class="dash-panel active" id="panel-worker"><div class="dash-row"><h3>Your Work Passport</h3><span class="badge badge-green" id="wVerified">—</span></div><div class="dash-grid"><div class="dash-stat"><div class="v" id="wScore">—</div><div class="l">Work Score</div></div><div class="dash-stat"><div class="v" id="wJobs">—</div><div class="l">Jobs completed</div></div><div class="dash-stat"><div class="v" id="wRate">—</div><div class="l">Completion rate</div></div><div class="dash-stat"><div class="v" id="wDisputes">—</div><div class="l">Active disputes</div></div></div><div class="dash-row" style="margin-top:24px"><h3>Work history</h3></div><table><thead><tr><th>Job</th><th>Contractor</th><th>Status</th><th>Completed</th></tr></thead><tbody id="wHistory"><tr><td colspan="4" class="empty">Log in to load your work history.</td></tr></tbody></table></div><div class="dash-panel" id="panel-contractor"><div class="dash-row"><h3>Posted jobs</h3><span class="badge badge-blue" id="cStatus">—</span></div><div class="dash-grid"><div class="dash-stat"><div class="v" id="cOpen">—</div><div class="l">Open jobs</div></div><div class="dash-stat"><div class="v" id="cFilled">—</div><div class="l">Filled</div></div><div class="dash-stat"><div class="v" id="cWorkers">—</div><div class="l">Workers hired</div></div><div class="dash-stat"><div class="v" id="cDisputes">—</div><div class="l">Disputes</div></div></div><div class="dash-row" style="margin-top:24px"><h3>Recent jobs</h3></div><table><thead><tr><th>Job</th><th>Trade</th><th>Status</th><th>Workers</th></tr></thead><tbody id="cJobs"><tr><td colspan="4" class="empty">Log in as a contractor to load your jobs.</td></tr></tbody></table></div></div></section>
 <section class="cta"><div class="wrap"><div class="cta-box"><h2>Your next job should remember the last one.</h2><p>Join the workforce platform where your work follows you — verified, scored, and yours.</p><div class="hero-cta"><a href="/api/auth/register" class="btn btn-primary btn-lg">Get your Work Passport &#8594;</a><a href="/api/auth/login" class="btn btn-ghost btn-lg">I already have one</a></div></div></div></section>
-<footer><div class="wrap"><div class="foot-in"><a href="#" class="logo"><img src="/bluejob-logo-workscore.png" alt="BlueJob" style="height:auto;width:260px;max-width:72vw;display:block"></a><div class="foot-links"><a href="#passport">Work Passport</a><a href="#score">Work Score</a><a href="#how">How it works</a><a href="/api/auth/register">Sign up</a></div></div><div class="foot-bottom">&copy; 2026 Bluejob. Built on Cloudflare. Your work, verified.</div></div></footer>
+<footer><div class="wrap"><div class="foot-in"><a href="#" class="logo"><img src="/bluejob-logo-white.png" alt="BlueJob" style="height:auto;width:260px;max-width:72vw;display:block"></a><div class="foot-links"><a href="#passport">Work Passport</a><a href="#score">Work Score</a><a href="#how">How it works</a><a href="/api/auth/register">Sign up</a></div></div><div class="foot-bottom">&copy; 2026 Bluejob. Built on Cloudflare. Your work, verified.</div></div></footer>
 <div class="toast" id="toast"></div>
 <script>
 function animateCount(el,target,dur){dur=dur||1400;var start=performance.now();function tick(now){var p=Math.min((now-start)/dur,1);var eased=1-Math.pow(1-p,3);el.textContent=Math.floor(eased*target).toLocaleString();if(p<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)}
