@@ -9,7 +9,7 @@ const json = (body, status = 200, headers = {}) =>
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const cookie = (token, maxAge) =>
   `bj_session=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`;
-const resetWindowSeconds = 300;
+const stripeSignatureWindowSeconds = 300;
 const cors = (request, response) => {
   const origin = request.headers.get("Origin");
   if (origin === "https://bluejob.net" || origin === "http://localhost:5173") {
@@ -611,7 +611,7 @@ async function stripeWebhook(request, env, db) {
   const fields = Object.fromEntries(signatureHeader.split(",").map((entry) => entry.trim().split("=", 2)));
   const timestamp = Number(fields.t);
   const signature = fields.v1;
-  if (!timestamp || !signature || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > resetWindowSeconds) {
+  if (!timestamp || !signature || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > stripeSignatureWindowSeconds) {
     return json({ error: "Invalid Stripe signature" }, 400);
   }
   const expected = createHmac("sha256", env.STRIPE_WEBHOOK_SECRET).update(`${timestamp}.${payload}`).digest("hex");

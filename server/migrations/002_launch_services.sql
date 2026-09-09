@@ -37,7 +37,6 @@ CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id,expires_at);
 CREATE TABLE IF NOT EXISTS roles (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text UNIQUE NOT NULL);
 CREATE TABLE IF NOT EXISTS user_roles (user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, role_id uuid NOT NULL REFERENCES roles(id) ON DELETE CASCADE, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(user_id,role_id));
 INSERT INTO roles(name) VALUES ('WORKER'),('CONTRACTOR'),('ADMIN'),('SUPER_ADMIN') ON CONFLICT(name) DO NOTHING;
-UPDATE users SET role='ADMIN' WHERE role='SUPER_ADMIN' AND email='director@clearestway.org';
 
 CREATE TABLE IF NOT EXISTS revoked_tokens (jti text PRIMARY KEY, expires_at timestamptz NOT NULL);
 CREATE INDEX IF NOT EXISTS revoked_tokens_expires_idx ON revoked_tokens(expires_at);
