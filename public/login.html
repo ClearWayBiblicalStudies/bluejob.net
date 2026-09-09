@@ -40,6 +40,11 @@ button:disabled{opacity:.6}
 </div>
 </div>
 <script>
+function destination(user){
+const role=user?.role||(Array.isArray(user?.roles)?user.roles[0]:null);
+if(role==="SUPER_ADMIN"||role==="ADMIN")return"/app/admin";
+return role==="CONTRACTOR"?"/app/contractor":"/app/worker";
+}
 document.getElementById("loginForm").addEventListener("submit",async function(e){
 e.preventDefault();
 const btn=document.getElementById("loginBtn");
@@ -60,8 +65,8 @@ password:document.getElementById("password").value
 const data=await response.json();
 if(!response.ok)throw new Error(data.error||"Login failed");
 msg.style.color="#16865c";
-msg.textContent="Login successful.";
-window.location.href="/#dashboard";
+msg.textContent=data.requiresPasswordChange?"Password change required. Redirecting...":"Login successful.";
+window.location.href=data.requiresPasswordChange?"/change-password.html":destination(data.user);
 }catch(err){
 msg.style.color="#c62828";
 msg.textContent=err.message;
