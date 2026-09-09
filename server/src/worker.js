@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), {
@@ -9,6 +9,7 @@ const json = (body, status = 200, headers = {}) =>
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const cookie = (token, maxAge) =>
   `bj_session=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`;
+const stripeSignatureWindowSeconds = 300;
 const cors = (request, response) => {
   const origin = request.headers.get("Origin");
   if (origin === "https://bluejob.net" || origin === "http://localhost:5173") {
@@ -56,6 +57,89 @@ async function passwordMatches(password, storedHash, pepper) {
 
 function resetEmailConfigured(env) {
   return Boolean(env.RESEND_API_KEY && env.PASSWORD_RESET_FROM);
+}
+
+function mapStripeStatus(status) {
+  if (status === "active") return "ACTIVE";
+  if (status === "trialing") return "TRIAL";
+  if (status === "past_due" || status === "unpaid" || status === "incomplete") return "PAST_DUE";
+  if (status === "incomplete_expired") return "EXPIRED";
+  if (status === "canceled") return "CANCELED";
+  return "NONE";
+}
+
+function configuredOrigin(env) {
+  const origin = env.APP_ORIGIN || "https://bluejob.net";
+  return origin.replace(/\/+$/, "");
+}
+
+async function hasActiveMembership(db, userId) {
+  const result = await db.query(
+    `SELECT COALESCE(m.status, u.membership_status, 'NONE') AS status,
+            COALESCE(m.current_period_end, u.membership_expires_at) AS expires_at
+       FROM users u
+       LEFT JOIN memberships m ON m.user_id = u.id
+      WHERE u.id = $1`,
+    [userId],
+  );
+  const membership = result.rows[0];
+  const active = ["ACTIVE", "TRIAL", "COMPED"].includes(membership?.status);
+  const current = !membership?.expires_at || new Date(membership.expires_at) > new Date();
+  return Boolean(active && current);
+}
+
+async function persistMembershipStatus(db, options) {
+  const {
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    status,
+    periodEndUnix,
+  } = options;
+  const periodEnd = Number.isFinite(Number(periodEndUnix))
+    ? `to_timestamp(${Number(periodEndUnix)})`
+    : "NULL";
+  if (userId) {
+    await db.query(
+      `INSERT INTO memberships(user_id,stripe_customer_id,stripe_subscription_id,status,current_period_end,updated_at)
+       VALUES($1,$2,$3,$4,${periodEnd},now())
+       ON CONFLICT(user_id) DO UPDATE
+       SET stripe_customer_id = EXCLUDED.stripe_customer_id,
+           stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+           status = EXCLUDED.status,
+           current_period_end = EXCLUDED.current_period_end,
+           updated_at = now()`,
+      [userId, stripeCustomerId || null, stripeSubscriptionId || null, status],
+    );
+    await db.query(
+      `UPDATE users
+          SET membership_status = $1,
+              membership_started_at = COALESCE(membership_started_at, now()),
+              membership_expires_at = ${periodEnd},
+              updated_at = now()
+        WHERE id = $2`,
+      [status, userId],
+    );
+    return;
+  }
+  await db.query(
+    `UPDATE memberships
+        SET status = $1,
+            current_period_end = ${periodEnd},
+            updated_at = now()
+      WHERE stripe_subscription_id = $2 OR stripe_customer_id = $3`,
+    [status, stripeSubscriptionId || null, stripeCustomerId || null],
+  );
+  await db.query(
+    `UPDATE users
+        SET membership_status = $1,
+            membership_expires_at = ${periodEnd},
+            updated_at = now()
+      WHERE id IN (
+        SELECT user_id FROM memberships WHERE stripe_subscription_id = $2 OR stripe_customer_id = $3
+      )`,
+    [status, stripeSubscriptionId || null, stripeCustomerId || null],
+  );
 }
 
 async function sendPasswordResetEmail(env, email, token) {
@@ -107,11 +191,11 @@ async function auth(request, env, db, path) {
   if (["/api/auth/register", "/api/auth/signup"].includes(path) && request.method === "POST") {
     const input = await body(request);
     const accountType = input.accountType === "CONTRACTOR" ? "CONTRACTOR" : "WORKER";
-    const displayName = input.displayName?.trim();
+    const displayName = (input.displayName || input.name || "").trim();
     const companyName = input.companyName?.trim();
-    if (!input.email || !input.password || input.password.length < 12 || !displayName ||
+    if (!input.email || !input.password || input.password.length < 8 || !displayName ||
       displayName.length > 120 || (accountType === "CONTRACTOR" && (!companyName || companyName.length > 160))) {
-      return json({ error: "email, displayName, and a 12-character password are required" }, 400);
+      return json({ error: "Email, name, and an 8-character password are required" }, 400);
     }
     const password = await passwordHash(input.password, env.PASSWORD_PEPPER || "");
     try {
@@ -132,27 +216,28 @@ async function auth(request, env, db, path) {
       return json({ ...user, roles: [accountType] }, 201, { "set-cookie": cookie(token, 604800) });
     } catch (error) {
       await db.query("ROLLBACK").catch(() => {});
-      if (error.code === "23505") return json({ error: "Account already exists" }, 409);
+      if (error.code === "23505") return json({ error: "Email already registered" }, 409);
       throw error;
     }
   }
-  if (path === "/api/auth/login" && request.method === "POST") {
+  if (["/api/auth/login", "/api/auth/signin"].includes(path) && request.method === "POST") {
     const input = await body(request);
     const result = await db.query("SELECT * FROM users WHERE email=$1", [input.email?.toLowerCase()]);
     const user = result.rows[0];
     if (!user || !await passwordMatches(input.password || "", user.password_hash, env.PASSWORD_PEPPER || "")) {
-      return json({ error: "Invalid credentials" }, 401);
+      return json({ error: "Invalid email or password" }, 401);
     }
     const token = randomBytes(32).toString("base64url");
     await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
     const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
-    return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
+    return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, role: current?.roles?.[0] || "WORKER", roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
       "set-cookie": cookie(token, 604800),
     });
   }
   if (["/api/auth/password-reset/request", "/api/auth/forgot-password"].includes(path) && request.method === "POST") {
     const email = (await body(request)).email?.trim().toLowerCase();
-    if (!email || !resetEmailConfigured(env)) return json({ ok: true });
+    if (!email) return json({ error: "Email is required" }, 400);
+    if (!resetEmailConfigured(env)) return json({ error: "Password reset is temporarily unavailable" }, 503);
     const result = await db.query("SELECT id FROM users WHERE email=$1", [email]);
     if (!result.rowCount) return json({ ok: true });
     const token = randomBytes(32).toString("base64url");
@@ -167,13 +252,14 @@ async function auth(request, env, db, path) {
     } catch (error) {
       await db.query("DELETE FROM password_reset_tokens WHERE token_hash=$1", [tokenHash]);
       console.error("password reset delivery failed");
+      return json({ error: "Unable to send password reset email right now" }, 502);
     }
     return json({ ok: true });
   }
   if (["/api/auth/password-reset/confirm", "/api/auth/reset-password"].includes(path) && request.method === "POST") {
     const input = await body(request);
-    if (!input.token || !input.password || input.password.length < 12) {
-      return json({ error: "A valid reset link and a 12-character password are required" }, 400);
+    if (!input.token || !input.password || input.password.length < 8) {
+      return json({ error: "A valid reset link and an 8-character password are required" }, 400);
     }
     await db.query("BEGIN");
     try {
@@ -198,7 +284,7 @@ async function auth(request, env, db, path) {
       await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.rows[0].id, hash(token)]);
       await db.query("COMMIT");
       const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
-      return json({ ok: true, user: { id: user.rows[0].id, email: user.rows[0].email, displayName: user.rows[0].display_name, roles: current?.roles || [], onboardingPath: user.rows[0].onboarding_path } }, 200, {
+      return json({ ok: true, user: { id: user.rows[0].id, email: user.rows[0].email, displayName: user.rows[0].display_name, role: current?.roles?.[0] || "WORKER", roles: current?.roles || [], onboardingPath: user.rows[0].onboarding_path } }, 200, {
         "set-cookie": cookie(token, 604800),
       });
     } catch (error) {
@@ -211,15 +297,69 @@ async function auth(request, env, db, path) {
     if (token) await db.query("UPDATE sessions SET revoked_at=now() WHERE token_hash=$1", [hash(token)]);
     return json({ ok: true }, 200, { "set-cookie": cookie("", 0) });
   }
+  if (path === "/api/auth/me" && request.method === "GET") {
+    const user = await session(request, db);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    return json({ user: { id: user.id, email: user.email, displayName: user.display_name, role: user.roles?.[0] || "WORKER", roles: user.roles || [], onboardingPath: user.onboarding_path } });
+  }
+  if (path === "/api/auth/settings" && request.method === "GET") {
+    const user = await session(request, db);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    const current = await db.query(
+      "SELECT email, COALESCE(email_verified,false) email_verified, phone, COALESCE(phone_verified,false) phone_verified, COALESCE(mfa_enabled,false) mfa_enabled FROM users WHERE id=$1",
+      [user.id],
+    );
+    if (!current.rowCount) return json({ error: "User not found" }, 404);
+    return json({ settings: current.rows[0] });
+  }
   return null;
 }
 
 async function api(request, env, db, user, path) {
   if (path === "/api/me" && request.method === "GET") {
     if (!user) return json({ error: "Authentication required" }, 401);
-    return json({ id: user.id, email: user.email, displayName: user.display_name, roles: user.roles, onboardingPath: user.onboarding_path });
+    return json({ user: { id: user.id, email: user.email, displayName: user.display_name, role: user.roles?.[0] || "WORKER", roles: user.roles, onboardingPath: user.onboarding_path } });
   }
   if (!user) return json({ error: "Authentication required" }, 401);
+
+  if (path === "/api/billing/checkout" && request.method === "POST") {
+    if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PRICE_ID) {
+      return json({ error: "Subscription checkout is temporarily unavailable" }, 503);
+    }
+    const priceResponse = await fetch(`https://api.stripe.com/v1/prices/${env.STRIPE_PRICE_ID}`, {
+      headers: { Authorization: "Bearer " + env.STRIPE_SECRET_KEY },
+    });
+    if (!priceResponse.ok) return json({ error: "Unable to validate subscription plan" }, 503);
+    const price = await priceResponse.json();
+    if (price.unit_amount !== 1999 || price.recurring?.interval !== "month") {
+      return json({ error: "Subscription plan is misconfigured" }, 503);
+    }
+    const successUrl = `${configuredOrigin(env)}/membership/success`;
+    const cancelUrl = `${configuredOrigin(env)}/membership/cancel`;
+    const payload = new URLSearchParams({
+      mode: "subscription",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      "line_items[0][price]": env.STRIPE_PRICE_ID,
+      "line_items[0][quantity]": "1",
+      client_reference_id: user.id,
+      "metadata[user_id]": user.id,
+      ...(user.email ? { customer_email: user.email } : {}),
+    });
+    const checkoutResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + env.STRIPE_SECRET_KEY, "content-type": "application/x-www-form-urlencoded" },
+      body: payload,
+    });
+    if (!checkoutResponse.ok) return json({ error: "Unable to start checkout right now" }, 502);
+    const checkout = await checkoutResponse.json();
+    return json({ url: checkout.url, id: checkout.id });
+  }
+
+  const paidPrefixes = ["/api/passport", "/api/jobs", "/api/workers"];
+  if (paidPrefixes.some((prefix) => path.startsWith(prefix)) && !(await hasActiveMembership(db, user.id))) {
+    return json({ error: "An active BlueJob subscription is required to access this feature" }, 402);
+  }
 
   if (path === "/api/onboarding" && request.method === "POST") {
     const input = await body(request);
@@ -463,6 +603,59 @@ async function api(request, env, db, user, path) {
   return json({ error: "Not found" }, 404);
 }
 
+async function stripeWebhook(request, env, db) {
+  if (!env.STRIPE_WEBHOOK_SECRET) return json({ error: "Stripe webhook is not configured" }, 503);
+  const signatureHeader = request.headers.get("stripe-signature");
+  if (!signatureHeader) return json({ error: "Missing Stripe signature" }, 400);
+  const payload = await request.text();
+  const fields = Object.fromEntries(signatureHeader.split(",").map((entry) => entry.trim().split("=", 2)));
+  const timestamp = Number(fields.t);
+  const signature = fields.v1;
+  if (!timestamp || !signature || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > stripeSignatureWindowSeconds) {
+    return json({ error: "Invalid Stripe signature" }, 400);
+  }
+  const expected = createHmac("sha256", env.STRIPE_WEBHOOK_SECRET).update(`${timestamp}.${payload}`).digest("hex");
+  if (expected.length !== signature.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+    return json({ error: "Invalid Stripe signature" }, 400);
+  }
+  let event;
+  try {
+    event = JSON.parse(payload);
+  } catch {
+    return json({ error: "Invalid Stripe payload" }, 400);
+  }
+  const eventId = event.id || randomBytes(16).toString("hex");
+  await db.query(
+    `INSERT INTO subscription_events(event_id,event_type,payload)
+     VALUES($1,$2,$3::jsonb)
+     ON CONFLICT(event_id) DO NOTHING`,
+    [eventId, event.type || "unknown", payload],
+  );
+  if (event.type === "checkout.session.completed") {
+    const object = event.data?.object || {};
+    const status = object.payment_status === "paid" ? "ACTIVE" : "PAST_DUE";
+    const userId = object.client_reference_id || object.metadata?.user_id || null;
+    await persistMembershipStatus(db, {
+      userId,
+      stripeCustomerId: object.customer,
+      stripeSubscriptionId: object.subscription,
+      status,
+      periodEndUnix: object.expires_at || null,
+    });
+  }
+  if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
+    const subscription = event.data?.object || {};
+    await persistMembershipStatus(db, {
+      userId: null,
+      stripeCustomerId: subscription.customer || null,
+      stripeSubscriptionId: subscription.id || null,
+      status: mapStripeStatus(subscription.status),
+      periodEndUnix: subscription.current_period_end || null,
+    });
+  }
+  return json({ received: true });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
@@ -478,6 +671,9 @@ export default {
         if (path === "/api/readyz" && request.method === "GET") {
           await db.query("SELECT 1");
           return json({ ok: true, database: "ready" });
+        }
+        if (path === "/api/billing/webhook" && request.method === "POST") {
+          return stripeWebhook(request, env, db);
         }
         const authResponse = await auth(request, env, db, path);
         if (authResponse) return authResponse;

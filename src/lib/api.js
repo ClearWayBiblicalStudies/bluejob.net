@@ -1,4 +1,4 @@
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = import.meta.env.VITE_API_URL || '/api';
 export function setToken() {}
 async function request(path, options = {}) {
   const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers };
@@ -9,16 +9,18 @@ async function request(path, options = {}) {
 }
 export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
-  signin: (body) => request('/auth/signin', { method: 'POST', body: JSON.stringify(body) }),
+  signin: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   signup: (body) => request('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
-  me: () => request('/auth/me'),
+  me: () => request('/me'),
+  forgotPassword: (body) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
+  resetPassword: (body) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   passport: () => request('/passport'),
   savePassport: (body) => request('/passport', { method: 'PUT', body: JSON.stringify(body) }),
   evidence: () => request('/passport/evidence'),
   uploadEvidence: (body) => request('/passport/evidence', { method: 'POST', body }),
   adminSummary: () => request('/admin/summary'),
-  health: () => request('/health'),
-  readiness: () => request('/readiness'),
+  health: () => request('/healthz'),
+  readiness: () => request('/readyz'),
   settings: () => request('/auth/settings'),
   enableMfa: (body) => request('/auth/mfa/setup', { method: 'POST', body: JSON.stringify(body) }),
   verifyMfa: (body) => request('/auth/mfa/enable', { method: 'POST', body: JSON.stringify(body) }),
