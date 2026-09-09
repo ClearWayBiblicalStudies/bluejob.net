@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
+    "migrate": "node migrate.js",
     "seed:founder": "node src/seed-founder.js",
     "test": "NODE_ENV=test node --test test/*.test.js",
     "check": "node --check src/index.js && node --check src/lib/auth.js && node --check src/routes/auth.js && node --check src/routes/jobs.js && node --check src/routes/admin.js"
