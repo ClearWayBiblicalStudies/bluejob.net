@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign up | BlueJob</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(145deg,#fff,#f3f8ff);color:#10213a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.wrap{width:100%;max-width:480px}.logo{display:block;width:250px;max-width:75vw;margin:0 auto 35px}.card{background:#fff;border:1px solid #d8e7f7;border-radius:26px;padding:32px;box-shadow:0 22px 60px rgba(20,85,160,.12)}h1{margin:0 0 8px;font-size:34px;text-align:center}.sub{text-align:center;color:#6b7a90;margin:0 0 28px}label{display:block;font-weight:700;margin:16px 0 8px}input,select{width:100%;padding:16px;border:1px solid #c9d9eb;border-radius:13px;font-size:16px;outline:none;background:#fff;color:#10213a}input:focus,select:focus{border-color:#1677ff;box-shadow:0 0 0 3px rgba(22,119,255,.12)}button{width:100%;margin-top:24px;padding:17px;border:0;border-radius:14px;background:linear-gradient(135deg,#48a0ff,#086cf0);color:#fff;font-size:17px;font-weight:800}button:disabled{opacity:.6}.msg{min-height:24px;margin-top:16px;text-align:center;color:#c62828}.links{text-align:center;margin-top:20px;color:#6b7a90}.links a{color:#1677ff;text-decoration:none;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+<img class="logo" src="/bluejob-logo.png" alt="BlueJob">
+<div class="card">
+<h1>Create account</h1>
+<p class="sub">Start your BlueJob profile in minutes.</p>
+<form id="signupForm">
+<label for="displayName">Full name</label>
+<input id="displayName" name="displayName" required>
+<label for="email">Email</label>
+<input id="email" name="email" type="email" autocomplete="email" required>
+<label for="password">Password (12+ characters)</label>
+<input id="password" name="password" type="password" minlength="12" autocomplete="new-password" required>
+<label for="accountType">I am a</label>
+<select id="accountType" name="accountType">
+<option value="WORKER">Worker</option>
+<option value="CONTRACTOR">Contractor</option>
+</select>
+<label id="companyLabel" for="companyName" style="display:none">Company name</label>
+<input id="companyName" name="companyName" style="display:none" maxlength="160">
+<button id="signupBtn" type="submit">Create account</button>
+<div class="msg" id="msg"></div>
+</form>
+<div class="links"><a href="/">Back to BlueJob</a> · <a href="/login.html">Log in</a></div>
+</div>
+</div>
+<script>
+const accountType=document.getElementById('accountType');
+const companyLabel=document.getElementById('companyLabel');
+const companyName=document.getElementById('companyName');
+accountType.addEventListener('change',()=>{
+  const contractor=accountType.value==='CONTRACTOR';
+  companyLabel.style.display=contractor?'block':'none';
+  companyName.style.display=contractor?'block':'none';
+  companyName.required=contractor;
+});
+document.getElementById('signupForm').addEventListener('submit',async function(e){
+  e.preventDefault();
+  const btn=document.getElementById('signupBtn');
+  const msg=document.getElementById('msg');
+  btn.disabled=true;btn.textContent='Creating account...';msg.textContent='';
+  try{
+    const payload={
+      email:document.getElementById('email').value.trim().toLowerCase(),
+      password:document.getElementById('password').value,
+      displayName:document.getElementById('displayName').value.trim(),
+      accountType:accountType.value,
+    };
+    if(accountType.value==='CONTRACTOR')payload.companyName=companyName.value.trim();
+    const response=await fetch('/api/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'Signup failed');
+    msg.style.color='#16865c';
+    msg.textContent='Account created. Redirecting...';
+    window.location.href='/login.html';
+  }catch(err){
+    msg.style.color='#c62828';msg.textContent=err.message;btn.disabled=false;btn.textContent='Create account';
+  }
+});
+</script>
+</body>
+</html>
