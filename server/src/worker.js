@@ -375,6 +375,7 @@ async function auth(request, env, db, path) {
   if (path === "/api/auth/change-password" && request.method === "POST") {
     const current = await session(request, db);
     if (!current) return json({ error: "Authentication required" }, 401);
+    if (!current.force_password_change) return json({ error: "Password change is not required for this session" }, 403);
     const input = await body(request);
     const nextPassword = String(input.password || input.newPassword || "");
     if (nextPassword.length < 8) return json({ error: "A new 8-character password is required" }, 400);
