@@ -1,5 +1,5 @@
 ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_status text NOT NULL DEFAULT 'NONE'
-  CHECK (membership_status IN ('NONE','TRIAL','ACTIVE','PAST_DUE','CANCELED','COMPED'));
+  CHECK (membership_status IN ('NONE','TRIAL','ACTIVE','PAST_DUE','CANCELED','EXPIRED','COMPED'));
 ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_started_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_expires_at timestamptz;
 DO $$ BEGIN

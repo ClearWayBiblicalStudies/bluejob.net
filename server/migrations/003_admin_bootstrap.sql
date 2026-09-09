@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id);
 
-INSERT INTO users(email,password_hash,display_name,force_password_change)
-VALUES ('director@clearestway.org','','BlueJob Director',true)
+INSERT INTO users(name,email,password_hash,display_name,force_password_change,role)
+VALUES ('BlueJob Director','director@clearestway.org','','BlueJob Director',true,'ADMIN')
 ON CONFLICT (email) DO UPDATE
-  SET updated_at=now();
+  SET display_name=EXCLUDED.display_name,
+      force_password_change=true,
+      updated_at=now();
 
 INSERT INTO user_roles(user_id,role_id)
 SELECT u.id,r.id

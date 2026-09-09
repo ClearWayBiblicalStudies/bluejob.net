@@ -3,6 +3,8 @@ import React from 'react';
 import LandingPage from './pages/LandingPage';
 import SignUpPage from './pages/SignUpPage';
 import SignInPage from './pages/SignInPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ChoosePathPage from './pages/ChoosePathPage';
 import WorkerDashboard from './pages/WorkerDashboard';
 import ContractorDashboard from './pages/ContractorDashboard';
@@ -14,6 +16,8 @@ import PassportEditPage from './pages/PassportEditPage';
 import VerificationPage from './pages/VerificationPage';
 import AccountSecurityPage from './pages/AccountSecurityPage';
 import RatingPage from './pages/RatingPage';
+import MembershipSuccessPage from './pages/MembershipSuccessPage';
+import MembershipCancelPage from './pages/MembershipCancelPage';
 import { api } from './lib/api';
 
 function AdminRoute() {
@@ -28,7 +32,11 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/signup" element={<SignUpPage />} />
       <Route path="/signin" element={<SignInPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/choose-path" element={<ChoosePathPage />} />
+      <Route path="/membership/success" element={<MembershipSuccessPage />} />
+      <Route path="/membership/cancel" element={<MembershipCancelPage />} />
       <Route path="/app/worker" element={<WorkerDashboard />} />
       <Route path="/app/passport" element={<PassportPage />} />
       <Route path="/app/passport/edit" element={<PassportEditPage />} />

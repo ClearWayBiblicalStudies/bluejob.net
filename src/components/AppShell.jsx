@@ -1,5 +1,7 @@
 import { Bell, BriefcaseBusiness, Building2, CreditCard, FileCheck2, Gauge, LayoutDashboard, MessageSquare, ReceiptText, Search, Settings, ShieldCheck, UserRound, Users, ClipboardCheck, Scale, BarChart3 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../lib/api';
 import Logo from './Logo';
 
 const workerNav = [
@@ -41,6 +43,7 @@ const adminNav = [
 ];
 
 export default function AppShell({ role = 'worker', children, user = { initials: 'AA', name: 'Austin A.' } }) {
+  const navigate = useNavigate();
   const items = role === 'admin' ? adminNav : role === 'contractor' ? contractorNav : workerNav;
   return (
     <div className="app-layout">
@@ -68,6 +71,9 @@ export default function AppShell({ role = 'worker', children, user = { initials:
                 <span>{role === 'admin' ? 'SUPER_ADMIN · BlueJob Administration' : role === 'contractor' ? 'Chrome Construction' : 'Subcontractor'}</span>
               </div>
             </div>
+            <button className="button button-ghost" onClick={async () => { try { await api.logout(); } catch {} navigate('/signin'); }}>
+              Log out
+            </button>
           </div>
         </header>
         <main className="page-content">{children}</main>
