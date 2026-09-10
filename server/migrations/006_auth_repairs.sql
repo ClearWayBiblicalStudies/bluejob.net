@@ -37,12 +37,81 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_expires_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 UPDATE users
+SET name = COALESCE(NULLIF(name, ''), split_part(email, '@', 1))
+WHERE COALESCE(name, '') = '';
+
+UPDATE users
 SET display_name = COALESCE(NULLIF(display_name, ''), NULLIF(name, ''), split_part(email, '@', 1))
 WHERE COALESCE(display_name, '') = '';
+
+UPDATE users
+SET password_hash = ''
+WHERE password_hash IS NULL;
+
+UPDATE users
+SET role = 'WORKER'
+WHERE role IS NULL OR role NOT IN ('WORKER', 'CONTRACTOR', 'ADMIN', 'SUPER_ADMIN');
+
+UPDATE users
+SET force_password_change = false
+WHERE force_password_change IS NULL;
+
+UPDATE users
+SET email_verified = false
+WHERE email_verified IS NULL;
+
+UPDATE users
+SET phone_verified = false
+WHERE phone_verified IS NULL;
+
+UPDATE users
+SET mfa_enabled = false
+WHERE mfa_enabled IS NULL;
+
+UPDATE users
+SET membership_status = 'NONE'
+WHERE membership_status IS NULL OR membership_status NOT IN ('NONE', 'TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'EXPIRED', 'COMPED');
+
+UPDATE users
+SET created_at = now()
+WHERE created_at IS NULL;
+
+UPDATE users
+SET updated_at = now()
+WHERE updated_at IS NULL;
+
+ALTER TABLE users ALTER COLUMN name SET DEFAULT '';
+ALTER TABLE users ALTER COLUMN name SET NOT NULL;
+ALTER TABLE users ALTER COLUMN display_name SET DEFAULT '';
+ALTER TABLE users ALTER COLUMN display_name SET NOT NULL;
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'WORKER';
+ALTER TABLE users ALTER COLUMN role SET NOT NULL;
+ALTER TABLE users ALTER COLUMN force_password_change SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN force_password_change SET NOT NULL;
+ALTER TABLE users ALTER COLUMN email_verified SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN email_verified SET NOT NULL;
+ALTER TABLE users ALTER COLUMN phone_verified SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN phone_verified SET NOT NULL;
+ALTER TABLE users ALTER COLUMN mfa_enabled SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN mfa_enabled SET NOT NULL;
+ALTER TABLE users ALTER COLUMN membership_status SET DEFAULT 'NONE';
+ALTER TABLE users ALTER COLUMN membership_status SET NOT NULL;
+ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;
+ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT now();
+ALTER TABLE users ALTER COLUMN updated_at SET NOT NULL;
 
 DO $$ BEGIN
   ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
   ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('WORKER','CONTRACTOR','ADMIN','SUPER_ADMIN'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS users_membership_status_check;
+  ALTER TABLE users ADD CONSTRAINT users_membership_status_check CHECK (membership_status IN ('NONE', 'TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'EXPIRED', 'COMPED'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -72,6 +141,20 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+UPDATE sessions
+SET created_at = now()
+WHERE created_at IS NULL;
+
+UPDATE sessions
+SET expires_at = COALESCE(expires_at, now())
+WHERE expires_at IS NULL;
+
+ALTER TABLE sessions ALTER COLUMN user_id SET NOT NULL;
+ALTER TABLE sessions ALTER COLUMN token_hash SET NOT NULL;
+ALTER TABLE sessions ALTER COLUMN expires_at SET NOT NULL;
+ALTER TABLE sessions ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE sessions ALTER COLUMN created_at SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id, expires_at);
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -83,12 +166,28 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+UPDATE password_reset_tokens
+SET created_at = now()
+WHERE created_at IS NULL;
+
+ALTER TABLE password_reset_tokens ALTER COLUMN user_id SET NOT NULL;
+ALTER TABLE password_reset_tokens ALTER COLUMN token_hash SET NOT NULL;
+ALTER TABLE password_reset_tokens ALTER COLUMN expires_at SET NOT NULL;
+ALTER TABLE password_reset_tokens ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE password_reset_tokens ALTER COLUMN created_at SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id);
 
 CREATE TABLE IF NOT EXISTS revoked_tokens (
   jti text PRIMARY KEY,
   expires_at timestamptz NOT NULL
 );
+
+UPDATE revoked_tokens
+SET expires_at = now()
+WHERE expires_at IS NULL;
+
+ALTER TABLE revoked_tokens ALTER COLUMN expires_at SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS revoked_tokens_expires_idx ON revoked_tokens(expires_at);
 
@@ -102,5 +201,17 @@ CREATE TABLE IF NOT EXISTS verification_codes (
   consumed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+UPDATE verification_codes
+SET created_at = now()
+WHERE created_at IS NULL;
+
+ALTER TABLE verification_codes ALTER COLUMN user_id SET NOT NULL;
+ALTER TABLE verification_codes ALTER COLUMN type SET NOT NULL;
+ALTER TABLE verification_codes ALTER COLUMN target SET NOT NULL;
+ALTER TABLE verification_codes ALTER COLUMN code_hash SET NOT NULL;
+ALTER TABLE verification_codes ALTER COLUMN expires_at SET NOT NULL;
+ALTER TABLE verification_codes ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE verification_codes ALTER COLUMN created_at SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS verification_codes_lookup ON verification_codes(user_id, type, expires_at);
