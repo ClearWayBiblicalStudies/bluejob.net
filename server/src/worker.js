@@ -43,8 +43,10 @@ async function passwordHash(password, pepper) {
 }
 
 async function passwordMatches(password, storedHash, pepper) {
-  if (storedHash.startsWith("pbkdf2$")) {
-    const [algorithm, iterations, salt, expected] = storedHash.split("$");
+  const normalizedHash = String(storedHash || "").trim();
+  if (!normalizedHash) return false;
+  if (normalizedHash.startsWith("pbkdf2$")) {
+    const [algorithm, iterations, salt, expected] = normalizedHash.split("$");
     if (algorithm !== "pbkdf2" || !/^\d+$/.test(iterations) || !salt || !/^[0-9a-f]{64}$/.test(expected)) return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
     const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: Number(iterations) }, key, 256);
@@ -52,7 +54,7 @@ async function passwordMatches(password, storedHash, pepper) {
     return actual === expected;
   }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${pepper}:${password}`));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === storedHash;
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === normalizedHash;
 }
 
 function resetEmailConfigured(env) {
@@ -292,7 +294,7 @@ async function auth(request, env, db, path) {
       const token = randomBytes(32).toString("base64url");
       await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
       await db.query("COMMIT");
-      return json({ ...user, roles: [accountType] }, 201, { "set-cookie": cookie(token, 604800) });
+      return json({ ok: true, user: userResponse({ ...user, roles: [accountType] }) }, 201, { "set-cookie": cookie(token, 604800) });
     } catch (error) {
       await db.query("ROLLBACK").catch(() => {});
       if (error.code === "23505") return json({ error: "Email already registered" }, 409);
@@ -319,7 +321,7 @@ async function auth(request, env, db, path) {
     if (!email) return json({ error: "Email is required" }, 400);
     if (!resetEmailConfigured(env)) return json({ error: "Password reset is temporarily unavailable" }, 503);
     const result = await db.query("SELECT id FROM users WHERE email=$1", [email]);
-    if (!result.rowCount) return json({ ok: true });
+    if (!result.rowCount) return json({ ok: true, message: "If an account exists, a reset link has been sent." });
     const token = randomBytes(32).toString("base64url");
     const tokenHash = hash(token);
     await db.query("DELETE FROM password_reset_tokens WHERE user_id=$1 OR expires_at <= now()", [result.rows[0].id]);
@@ -334,7 +336,7 @@ async function auth(request, env, db, path) {
       console.error("password reset delivery failed");
       return json({ error: "Unable to send password reset email right now" }, 502);
     }
-    return json({ ok: true });
+    return json({ ok: true, message: "If an account exists, a reset link has been sent." });
   }
   if (["/api/auth/password-reset/confirm", "/api/auth/reset-password"].includes(path) && request.method === "POST") {
     const input = await body(request);
@@ -360,12 +362,9 @@ async function auth(request, env, db, path) {
         [password, reset.rows[0].user_id],
       );
       await db.query("DELETE FROM sessions WHERE user_id=$1", [user.rows[0].id]);
-      const token = randomBytes(32).toString("base64url");
-      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.rows[0].id, hash(token)]);
       await db.query("COMMIT");
-      const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
-      return json({ ok: true, user: userResponse(current || user.rows[0]), requiresPasswordChange: false }, 200, {
-        "set-cookie": cookie(token, 604800),
+      return json({ ok: true, redirectTo: "/signin" }, 200, {
+        "set-cookie": cookie("", 0),
       });
     } catch (error) {
       await db.query("ROLLBACK").catch(() => {});
@@ -407,7 +406,7 @@ async function auth(request, env, db, path) {
   if (path === "/api/auth/me" && request.method === "GET") {
     const user = await session(request, db);
     if (!user) return json({ error: "Authentication required" }, 401);
-    return json({ user: userResponse(user) });
+    return json({ ok: true, user: userResponse(user) });
   }
   if (path === "/api/auth/settings" && request.method === "GET") {
     const user = await session(request, db);
@@ -417,7 +416,7 @@ async function auth(request, env, db, path) {
       [user.id],
     );
     if (!current.rowCount) return json({ error: "User not found" }, 404);
-    return json({ settings: current.rows[0] });
+    return json({ ok: true, settings: current.rows[0] });
   }
   return null;
 }
@@ -766,30 +765,34 @@ async function stripeWebhook(request, env, db) {
   return json({ received: true });
 }
 
+export async function handleRequest(request, env, db) {
+  if (request.method === "OPTIONS") {
+    return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
+  }
+  const url = new URL(request.url);
+  const path = url.pathname;
+  if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
+  if (path === "/healthz" && request.method === "GET") {
+    await db.query("SELECT 1");
+    return cors(request, json({ ok: true, database: "connected" }));
+  }
+  if (path === "/api/readyz" && request.method === "GET") {
+    await db.query("SELECT 1");
+    return cors(request, json({ ok: true, database: "ready" }));
+  }
+  if (path === "/api/billing/webhook" && request.method === "POST") {
+    return cors(request, await stripeWebhook(request, env, db));
+  }
+  const authResponse = await auth(request, env, db, path);
+  if (authResponse) return cors(request, authResponse);
+  const user = await session(request, db);
+  return cors(request, await api(request, env, db, user, path));
+}
+
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204, headers: { "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS", "Access-Control-Allow-Headers": "content-type" } }));
-    const url = new URL(request.url);
-    const path = url.pathname;
-    if (path === "/api/healthz") return cors(request, json({ ok: true, service: "bluejob-api" }));
     try {
-      return cors(request, await withDb(env, async (db) => {
-        if (path === "/healthz" && request.method === "GET") {
-          await db.query("SELECT 1");
-          return json({ ok: true, database: "connected" });
-        }
-        if (path === "/api/readyz" && request.method === "GET") {
-          await db.query("SELECT 1");
-          return json({ ok: true, database: "ready" });
-        }
-        if (path === "/api/billing/webhook" && request.method === "POST") {
-          return stripeWebhook(request, env, db);
-        }
-        const authResponse = await auth(request, env, db, path);
-        if (authResponse) return authResponse;
-        const user = await session(request, db);
-        return api(request, env, db, user, path);
-      }));
+      return await withDb(env, async (db) => handleRequest(request, env, db));
     } catch (error) {
       console.error("request failed", error.message);
       return cors(request, json({ error: "Service unavailable" }, 503));
