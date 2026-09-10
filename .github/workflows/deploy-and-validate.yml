@@ -49,7 +49,7 @@ jobs:
           import { Client } from "pg";
           import { createHash, createHmac, randomBytes } from "node:crypto";
 
-          const base = "https://bluejob.net";
+          const base = "https://bluejob-net.director-c6a.workers.dev";
           const report = {};
           const cookieJar = new Map();
 
