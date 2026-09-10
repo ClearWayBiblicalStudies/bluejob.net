@@ -17,7 +17,7 @@ export default function SignInPage() {
       <div className="auth-card white-card">
         <h1>Welcome Back</h1>
         <p>Sign in to continue to BlueJob.</p>
-        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { const result = await api.signin({ email: form.get('email'), password: form.get('password') }); navigate(destination(result.user)); } catch (err) { setError(err.message); } }}>
+        <form onSubmit={async (e) => { e.preventDefault(); setError(''); const form = new FormData(e.currentTarget); try { const result = await api.signin({ email: form.get('email'), password: form.get('password') }); navigate(result.requiresPasswordChange ? '/change-password' : destination(result.user)); } catch (err) { setError(err.message); } }}>
           <label>Email<input name="email" type="email" placeholder="you@company.com" required /></label>
           <label>Password<input name="password" type="password" placeholder="••••••••••" required /></label>
           <div className="form-inline"><span>Secure session stays active after refresh.</span><Link to="/forgot-password">Forgot password?</Link></div>

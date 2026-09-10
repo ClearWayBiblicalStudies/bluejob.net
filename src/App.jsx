@@ -3,6 +3,7 @@ import React from 'react';
 import LandingPage from './pages/LandingPage';
 import SignUpPage from './pages/SignUpPage';
 import SignInPage from './pages/SignInPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ChoosePathPage from './pages/ChoosePathPage';
@@ -21,9 +22,19 @@ import MembershipCancelPage from './pages/MembershipCancelPage';
 import { api } from './lib/api';
 
 function AdminRoute() {
-  const [allowed, setAllowed] = React.useState(null);
-  React.useEffect(() => { api.me().then(({ user }) => setAllowed(['ADMIN','SUPER_ADMIN'].includes(user.role))).catch(() => setAllowed(false)); }, []);
-  return allowed ? <AdminJobs /> : allowed === false ? <Navigate to="/signin" replace /> : null;
+  const [target, setTarget] = React.useState(null);
+  React.useEffect(() => {
+    api.me()
+      .then(({ user }) => {
+        if (user?.requiresPasswordChange) {
+          setTarget('/change-password');
+          return;
+        }
+        setTarget(['ADMIN', 'SUPER_ADMIN'].includes(user.role) ? 'allowed' : '/signin');
+      })
+      .catch((error) => setTarget(error?.requiresPasswordChange ? '/change-password' : '/signin'));
+  }, []);
+  return target === 'allowed' ? <AdminJobs /> : target ? <Navigate to={target} replace /> : null;
 }
 
 export default function App() {
@@ -32,6 +43,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/signup" element={<SignUpPage />} />
       <Route path="/signin" element={<SignInPage />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/choose-path" element={<ChoosePathPage />} />

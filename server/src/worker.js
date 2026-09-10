@@ -56,7 +56,7 @@ async function passwordMatches(password, storedHash, pepper) {
 }
 
 function resetEmailConfigured(env) {
-  return Boolean(env.RESEND_API_KEY && env.PASSWORD_RESET_FROM);
+  return Boolean((env.RESEND_API_KEY && env.PASSWORD_RESET_FROM) || env.EMAIL_PROVIDER_URL);
 }
 
 function mapStripeStatus(status) {
@@ -143,21 +143,44 @@ async function persistMembershipStatus(db, options) {
 }
 
 async function sendPasswordResetEmail(env, email, token) {
-  const origin = new URL(env.APP_ORIGIN || "https://bluejob.net");
+  const origin = new URL(configuredOrigin(env));
   if (origin.protocol !== "https:") throw new Error("Password reset origin must use HTTPS");
   const resetUrl = new URL("/reset-password", origin);
   resetUrl.searchParams.set("token", token);
-  const response = await fetch("https://api.resend.com/emails", {
+  const subject = "Set your BlueJob password";
+  const html = `<p>Use this one-time link to set your BlueJob password:</p><p><a href="${resetUrl.href}">Set password</a></p><p>This link expires in one hour.</p>`;
+  const text = `Use this one-time link to set your BlueJob password: ${resetUrl.href}\n\nThis link expires in one hour.`;
+  if (env.RESEND_API_KEY && env.PASSWORD_RESET_FROM) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + env.RESEND_API_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        from: env.PASSWORD_RESET_FROM,
+        to: email,
+        subject,
+        html,
+        text,
+      }),
+    });
+    if (!response.ok) throw new Error("Password reset email delivery failed");
+    return;
+  }
+  const headers = { "content-type": "application/json" };
+  const providerToken = env.EMAIL_PROVIDER_TOKEN || env.VERIFICATION_PROVIDER_TOKEN;
+  if (providerToken) headers.Authorization = "Bearer " + providerToken;
+  const response = await fetch(env.EMAIL_PROVIDER_URL, {
     method: "POST",
-    headers: {
-      Authorization: "Bearer " + env.RESEND_API_KEY,
-      "content-type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
-      from: env.PASSWORD_RESET_FROM,
+      ...(env.PASSWORD_RESET_FROM ? { from: env.PASSWORD_RESET_FROM } : {}),
       to: email,
-      subject: "Set your BlueJob password",
-      html: `<p>Use this one-time link to set your BlueJob password:</p><p><a href="${resetUrl.href}">Set password</a></p><p>This link expires in one hour.</p>`,
+      subject,
+      html,
+      text,
+      resetUrl: resetUrl.href,
     }),
   });
   if (!response.ok) throw new Error("Password reset email delivery failed");
@@ -182,9 +205,65 @@ async function session(request, db) {
   return result.rows[0] ?? null;
 }
 
+function userResponse(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name,
+    role: user.roles?.[0] || user.role || "WORKER",
+    roles: user.roles || (user.role ? [user.role] : []),
+    onboardingPath: user.onboarding_path,
+    requiresPasswordChange: Boolean(user.force_password_change),
+  };
+}
+
 function requireRole(user, role) {
   if (!user || !user.roles.includes(role)) return json({ error: "Forbidden" }, 403);
   return null;
+}
+
+async function ensureDirectorAccount(db, env, email) {
+  const directorEmail = String(env.FOUNDER_EMAIL || "director@clearestway.org").trim().toLowerCase();
+  const tempPassword = String(env.FOUNDER_TEMP_PASSWORD || "");
+  if (!email || email !== directorEmail || !tempPassword) return;
+  if (tempPassword.length < 8) throw new Error("FOUNDER_TEMP_PASSWORD must be at least 8 characters");
+  const existing = await db.query(
+    "SELECT id, COALESCE(password_hash, '') AS password_hash FROM users WHERE email=$1 LIMIT 1",
+    [directorEmail],
+  );
+  if (existing.rows[0]?.password_hash?.trim()) {
+    await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='ADMIN' ON CONFLICT DO NOTHING", [existing.rows[0].id]);
+    return;
+  }
+  const password = await passwordHash(tempPassword, env.PASSWORD_PEPPER || "");
+  await db.query("BEGIN");
+  try {
+    const account = existing.rowCount
+      ? await db.query(
+        `UPDATE users
+            SET name='BlueJob Director',
+                display_name='BlueJob Director',
+                password_hash=$1,
+                role='ADMIN',
+                force_password_change=true,
+                updated_at=now()
+          WHERE id=$2
+        RETURNING id`,
+        [password, existing.rows[0].id],
+      )
+      : await db.query(
+        `INSERT INTO users(name,email,password_hash,display_name,force_password_change,role)
+         VALUES ('BlueJob Director',$1,$2,'BlueJob Director',true,'ADMIN')
+         RETURNING id`,
+        [directorEmail, password],
+      );
+    await db.query("INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='ADMIN' ON CONFLICT DO NOTHING", [account.rows[0].id]);
+    await db.query("DELETE FROM sessions WHERE user_id=$1", [account.rows[0].id]);
+    await db.query("COMMIT");
+  } catch (error) {
+    await db.query("ROLLBACK").catch(() => {});
+    throw error;
+  }
 }
 
 async function auth(request, env, db, path) {
@@ -222,6 +301,7 @@ async function auth(request, env, db, path) {
   }
   if (["/api/auth/login", "/api/auth/signin"].includes(path) && request.method === "POST") {
     const input = await body(request);
+    await ensureDirectorAccount(db, env, String(input.email || "").trim().toLowerCase());
     const result = await db.query("SELECT * FROM users WHERE email=$1", [input.email?.toLowerCase()]);
     const user = result.rows[0];
     if (!user || !await passwordMatches(input.password || "", user.password_hash, env.PASSWORD_PEPPER || "")) {
@@ -230,7 +310,7 @@ async function auth(request, env, db, path) {
     const token = randomBytes(32).toString("base64url");
     await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.id, hash(token)]);
     const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
-    return json({ ok: true, user: { id: user.id, email: user.email, displayName: user.display_name, role: current?.roles?.[0] || "WORKER", roles: current?.roles || [], onboardingPath: user.onboarding_path }, requiresPasswordChange: user.force_password_change }, 200, {
+    return json({ ok: true, user: userResponse(current || user), requiresPasswordChange: Boolean(user.force_password_change) }, 200, {
       "set-cookie": cookie(token, 604800),
     });
   }
@@ -284,7 +364,34 @@ async function auth(request, env, db, path) {
       await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [user.rows[0].id, hash(token)]);
       await db.query("COMMIT");
       const current = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
-      return json({ ok: true, user: { id: user.rows[0].id, email: user.rows[0].email, displayName: user.rows[0].display_name, role: current?.roles?.[0] || "WORKER", roles: current?.roles || [], onboardingPath: user.rows[0].onboarding_path } }, 200, {
+      return json({ ok: true, user: userResponse(current || user.rows[0]), requiresPasswordChange: false }, 200, {
+        "set-cookie": cookie(token, 604800),
+      });
+    } catch (error) {
+      await db.query("ROLLBACK").catch(() => {});
+      throw error;
+    }
+  }
+  if (path === "/api/auth/change-password" && request.method === "POST") {
+    const current = await session(request, db);
+    if (!current) return json({ error: "Authentication required" }, 401);
+    if (!current.force_password_change) return json({ error: "Password change is not required for this session" }, 403);
+    const input = await body(request);
+    const nextPassword = String(input.password || input.newPassword || "");
+    if (nextPassword.length < 8) return json({ error: "A new 8-character password is required" }, 400);
+    const password = await passwordHash(nextPassword, env.PASSWORD_PEPPER || "");
+    await db.query("BEGIN");
+    try {
+      await db.query(
+        "UPDATE users SET password_hash=$1,force_password_change=false,updated_at=now() WHERE id=$2",
+        [password, current.id],
+      );
+      await db.query("DELETE FROM sessions WHERE user_id=$1", [current.id]);
+      const token = randomBytes(32).toString("base64url");
+      await db.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')", [current.id, hash(token)]);
+      await db.query("COMMIT");
+      const refreshed = await session(new Request(request.url, { headers: { Cookie: `bj_session=${token}` } }), db);
+      return json({ ok: true, user: userResponse(refreshed), requiresPasswordChange: false }, 200, {
         "set-cookie": cookie(token, 604800),
       });
     } catch (error) {
@@ -300,7 +407,7 @@ async function auth(request, env, db, path) {
   if (path === "/api/auth/me" && request.method === "GET") {
     const user = await session(request, db);
     if (!user) return json({ error: "Authentication required" }, 401);
-    return json({ user: { id: user.id, email: user.email, displayName: user.display_name, role: user.roles?.[0] || "WORKER", roles: user.roles || [], onboardingPath: user.onboarding_path } });
+    return json({ user: userResponse(user) });
   }
   if (path === "/api/auth/settings" && request.method === "GET") {
     const user = await session(request, db);
@@ -318,9 +425,12 @@ async function auth(request, env, db, path) {
 async function api(request, env, db, user, path) {
   if (path === "/api/me" && request.method === "GET") {
     if (!user) return json({ error: "Authentication required" }, 401);
-    return json({ user: { id: user.id, email: user.email, displayName: user.display_name, role: user.roles?.[0] || "WORKER", roles: user.roles, onboardingPath: user.onboarding_path } });
+    return json({ user: userResponse(user) });
   }
   if (!user) return json({ error: "Authentication required" }, 401);
+  if (user.force_password_change) {
+    return json({ error: "Password change required", requiresPasswordChange: true }, 403);
+  }
 
   if (path === "/api/billing/checkout" && request.method === "POST") {
     if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PRICE_ID) {

@@ -4,12 +4,17 @@ async function request(path, options = {}) {
   const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers };
   const response = await fetch(`${API}${path}`, { ...options, headers, credentials: 'include' });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Request failed');
+  if (!response.ok) {
+   const error = new Error(data.error || 'Request failed');
+   Object.assign(error, data);
+   throw error;
+  }
   return data;
 }
 export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   signin: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  changePassword: (body) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
   signup: (body) => request('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request('/me'),
   forgotPassword: (body) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
