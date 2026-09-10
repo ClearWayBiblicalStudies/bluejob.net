@@ -49,7 +49,7 @@ jobs:
           import { Client } from "pg";
           import { createHash, createHmac, randomBytes } from "node:crypto";
 
-          const base = "https://bluejob-net.director-c6a.workers.dev";
+          const base = "https://bluejob.net";
           const report = {};
           const cookieJar = new Map();
 
@@ -71,13 +71,23 @@ jobs:
               const c = cookieHeader();
               if (c) headers.Cookie = c;
             }
-            const res = await fetch(`${base}${path}`, { ...options, headers });
-            const setCookie = res.headers.get("set-cookie");
-            if (setCookie) parseCookie(setCookie);
-            const text = await res.text();
-            let body = {};
-            try { body = text ? JSON.parse(text) : {}; } catch {}
-            return { status: res.status, body, text };
+            for (let attempt = 1; attempt <= 10; attempt += 1) {
+              let res;
+              try {
+                res = await fetch(`${base}${path}`, { ...options, headers });
+              } catch (error) {
+                if (attempt === 10) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                continue;
+              }
+              const setCookie = res.headers.get("set-cookie");
+              if (setCookie) parseCookie(setCookie);
+              const text = await res.text();
+              let body = {};
+              try { body = text ? JSON.parse(text) : {}; } catch {}
+              if (res.status !== 503 || attempt === 10) return { status: res.status, body, text };
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
           }
 
           function pass(name, ok, detail = {}) {
