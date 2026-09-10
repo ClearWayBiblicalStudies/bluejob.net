@@ -355,7 +355,16 @@ jobs:
               `);
 
               const tableNames = tables.rows.map((row) => row.tablename);
-              const requiredTables = ["users", "jobs"];
+              const requiredTables = [
+                "users",
+                "roles",
+                "user_roles",
+                "sessions",
+                "password_reset_tokens",
+                "revoked_tokens",
+                "verification_codes",
+                "jobs",
+              ];
               const missingTables = requiredTables.filter((table) => !tableNames.includes(table));
 
               console.log("");
