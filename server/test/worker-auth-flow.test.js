@@ -217,6 +217,11 @@ test("registration stores a hashed password and starts an authenticated session"
   const me = await call(db, env, "/api/me", { cookie: sessionCookie(response.cookie) });
   assert.equal(me.status, 200);
   assert.equal(me.body.user.email, "casey@example.com");
+
+  const authMe = await call(db, env, "/api/auth/me", { cookie: sessionCookie(response.cookie) });
+  assert.equal(authMe.status, 200);
+  assert.equal(authMe.body.ok, true);
+  assert.equal(authMe.body.user.email, "casey@example.com");
 });
 
 test("login rejects an invalid password", async () => {
@@ -257,12 +262,20 @@ test("login session persists across authenticated requests and logout revokes it
   assert.equal(me.status, 200);
   assert.equal(me.body.user.email, "casey@example.com");
 
+  const authMe = await call(db, env, "/api/auth/me", { cookie });
+  assert.equal(authMe.status, 200);
+  assert.equal(authMe.body.ok, true);
+  assert.equal(authMe.body.user.email, "casey@example.com");
+
   const logout = await call(db, env, "/api/auth/logout", { method: "POST", cookie });
   assert.equal(logout.status, 200);
   assert.match(logout.cookie || "", /Max-Age=0/);
 
   const meAfterLogout = await call(db, env, "/api/me", { cookie });
   assert.equal(meAfterLogout.status, 401);
+
+  const authMeAfterLogout = await call(db, env, "/api/auth/me", { cookie });
+  assert.equal(authMeAfterLogout.status, 401);
 });
 
 test("forgot password creates a single-use reset token and sends a reset link", async (t) => {
@@ -402,4 +415,9 @@ test("password reset invalidates the token, clears old sessions, and allows logi
   const me = await call(db, env, "/api/me", { cookie: sessionCookie(newLogin.cookie) });
   assert.equal(me.status, 200);
   assert.equal(me.body.user.email, "casey@example.com");
+
+  const authMe = await call(db, env, "/api/auth/me", { cookie: sessionCookie(newLogin.cookie) });
+  assert.equal(authMe.status, 200);
+  assert.equal(authMe.body.ok, true);
+  assert.equal(authMe.body.user.email, "casey@example.com");
 });

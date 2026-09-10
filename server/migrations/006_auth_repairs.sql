@@ -45,16 +45,18 @@ SET display_name = COALESCE(NULLIF(display_name, ''), NULLIF(name, ''), split_pa
 WHERE COALESCE(display_name, '') = '';
 
 UPDATE users
-SET password_hash = ''
-WHERE password_hash IS NULL;
+SET force_password_change = false
+WHERE force_password_change IS NULL AND COALESCE(BTRIM(password_hash), '') <> '';
+
+UPDATE users
+SET password_hash = encode(digest(gen_random_uuid()::text, 'sha256'), 'hex'),
+    force_password_change = true,
+    updated_at = now()
+WHERE COALESCE(BTRIM(password_hash), '') = '';
 
 UPDATE users
 SET role = 'WORKER'
 WHERE role IS NULL OR role NOT IN ('WORKER', 'CONTRACTOR', 'ADMIN', 'SUPER_ADMIN');
-
-UPDATE users
-SET force_password_change = false
-WHERE force_password_change IS NULL;
 
 UPDATE users
 SET email_verified = false
