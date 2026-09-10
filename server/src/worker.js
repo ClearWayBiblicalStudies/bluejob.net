@@ -43,8 +43,10 @@ async function passwordHash(password, pepper) {
 }
 
 async function passwordMatches(password, storedHash, pepper) {
-  if (storedHash.startsWith("pbkdf2$")) {
-    const [algorithm, iterations, salt, expected] = storedHash.split("$");
+  const normalizedHash = String(storedHash || "").trim();
+  if (!normalizedHash) return false;
+  if (normalizedHash.startsWith("pbkdf2$")) {
+    const [algorithm, iterations, salt, expected] = normalizedHash.split("$");
     if (algorithm !== "pbkdf2" || !/^\d+$/.test(iterations) || !salt || !/^[0-9a-f]{64}$/.test(expected)) return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${pepper}:${password}`), "PBKDF2", false, ["deriveBits"]);
     const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: Number(iterations) }, key, 256);
@@ -52,7 +54,7 @@ async function passwordMatches(password, storedHash, pepper) {
     return actual === expected;
   }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${pepper}:${password}`));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === storedHash;
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("") === normalizedHash;
 }
 
 function resetEmailConfigured(env) {
