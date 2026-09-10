@@ -8,41 +8,34 @@ CREATE TABLE IF NOT EXISTS organizations (
 
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL DEFAULT '',
-  display_name text NOT NULL DEFAULT '',
   email text UNIQUE NOT NULL,
   password_hash text NOT NULL,
-  role text NOT NULL DEFAULT 'WORKER' CHECK (role IN ('WORKER','CONTRACTOR','ADMIN','SUPER_ADMIN')),
-  organization_id uuid REFERENCES organizations(id),
-  onboarding_path text,
-  force_password_change boolean NOT NULL DEFAULT false,
-  membership_status text NOT NULL DEFAULT 'NONE',
-  membership_started_at timestamptz,
-  membership_expires_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS name text NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'WORKER';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_path text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_status text NOT NULL DEFAULT 'NONE';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_started_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_expires_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled boolean NOT NULL DEFAULT false;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT '';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change boolean NOT NULL DEFAULT false;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_path text;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_status text NOT NULL DEFAULT 'NONE';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_started_at timestamptz;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_expires_at timestamptz;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 UPDATE users
-SET name = COALESCE(NULLIF(name, ''), split_part(email, '@', 1))
-WHERE COALESCE(name, '') = '';
+SET name = ''
+WHERE name IS NULL;
 
 UPDATE users
-SET display_name = COALESCE(NULLIF(display_name, ''), NULLIF(name, ''), split_part(email, '@', 1))
-WHERE COALESCE(display_name, '') = '';
+SET display_name = ''
+WHERE display_name IS NULL;
 
 UPDATE users
 SET force_password_change = false
