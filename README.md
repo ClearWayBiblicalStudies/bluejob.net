@@ -1,33 +1,59 @@
-# BlueJob White UI
+# BlueJob — Repaired Cloudflare Production Package
 
-White/blue BlueJob frontend matching the approved visual direction.
+This repository contains one production architecture:
 
-## Run
+1. `bluejob-net` serves the Vite/React application.
+2. Requests under `/api/*` are forwarded through the existing `API` service binding.
+3. `bluejob-api` connects to PostgreSQL through the existing `HYPERDRIVE` binding.
+4. The migration runner creates and maintains the `bluejob` PostgreSQL schema.
+
+The former Express backend, duplicate Cloudflare configuration, nested ZIP packages, fake marketplace records, and plaintext bootstrap credential have been removed from this repaired package.
+
+## Required production configuration
+
+GitHub Actions repository secret:
+
+- `MIGRATION_DATABASE_URL` — direct PostgreSQL migration connection URI.
+
+Cloudflare secret required by `bluejob-api`:
+
+- `PASSWORD_PEPPER` — one stable random value of at least 32 characters. Never rotate it without a password migration plan.
+
+Cloudflare secrets required for password reset:
+
+- `RESEND_API_KEY`
+- `PASSWORD_RESET_FROM`
+
+Optional integrations:
+
+- `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET`
+- `SMS_PROVIDER_URL` and `SMS_PROVIDER_TOKEN`
+- R2 binding named `EVIDENCE_BUCKET` for private evidence uploads
+
+`APP_ORIGIN=https://bluejob.net` and `MEMBERSHIP_ENFORCEMENT=false` are non-secret Worker variables. Set membership enforcement to `true` only after Stripe webhook verification passes.
+
+## Deployment order
+
+1. Push this repository to the existing GitHub `main` branch.
+2. Run **BlueJob Production Database Migration** and confirm it reports the `users`, `sessions`, and `jobs` tables.
+3. From `server/`, deploy `bluejob-api` with its existing Hyperdrive binding.
+4. From the repository root, run the frontend build and deploy `bluejob-net`.
+5. Verify `/healthz`, `/api/readyz`, signup, login, logout, password reset, and role isolation.
+
+Do not alter DNS, Worker routes, or Cloudflare Access for this repair.
+
+## Local verification
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run build
+cd server
+npm ci
+npm run check
 ```
 
-## Included routes
+To test the migration locally, start PostgreSQL with `docker compose up -d db`, provide `DATABASE_URL`, then run `npm run migrate` from `server/`.
 
-- `/` — public landing page
-- `/signup` — account creation
-- `/signin` — sign in
-- `/choose-path` — subcontractor vs contractor path
-- `/app/worker` — Work Score / Work Passport worker dashboard
-- `/app/passport` — public Work Passport
-- `/app/passport/edit` — structured Passport editor
-- `/app/verification` — private evidence submission and review states
-- `/app/contractor` — contractor operations dashboard
-- `/app/post-job` — 5-step job posting flow
-- `/app/jobs/1/bids` — bid comparison + bidding insights
-- `/app/admin` — private Super Admin Command Center (requires `SUPER_ADMIN` session role)
+## Founder access
 
-## Important
-
-Authentication uses server-side JWT in HttpOnly cookies. Work Passport data, verification evidence, and all application state persist in the database via the backend API. Passwords, payment data, verification documents, Work Score decisions, and admin authorization are all handled server-side.
-
-## Admin bootstrap
-
-The production migration provisions `director@clearestway.org` with the `ADMIN` role. To activate the one-time administrator login without committing a plaintext password, set `FOUNDER_TEMP_PASSWORD` as a Cloudflare secret on the deployed API (and optionally `FOUNDER_EMAIL` if the email ever changes). On the first successful login, BlueJob forces that account through `/change-password` before any protected API route is available. Password-reset emails still require either `RESEND_API_KEY` plus `PASSWORD_RESET_FROM`, or an existing `EMAIL_PROVIDER_URL` provider with an optional bearer token. The migration workflow runs only from `main`; run it after the change is deployed.
+The migration provisions `director@clearestway.org` as `SUPER_ADMIN` with no usable password. Configure email delivery, open `/forgot-password`, and complete the one-hour password setup link. No administrator password is stored in this repository.
