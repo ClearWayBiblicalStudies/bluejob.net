@@ -84,7 +84,7 @@ jobs:
         shell: bash
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-          LEGACY_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           node <<'NODE'
           const fs = require("fs");
@@ -96,108 +96,146 @@ jobs:
             process.exit(1);
           }
 
-          const raw = (
-            process.env.MIGRATION_DATABASE_URL ||
-            process.env.LEGACY_DATABASE_URL ||
-            ""
-          ).trim();
+          function parseCandidate(name, rawValue) {
+            const raw = (rawValue || "").trim();
+            if (!raw) return null;
 
-          if (!raw) {
+            console.log(`::add-mask::${raw}`);
+
+            const line = raw
+              .split(/\r?\n/)
+              .map((entry) => entry.trim())
+              .find((entry) => /^(?:[A-Za-z_][A-Za-z0-9_]*=)?postgres(?:ql)?:\/\//i.test(entry));
+
+            if (!line) {
+              throw new Error(`${name} must contain a postgres:// or postgresql:// URI.`);
+            }
+
+            const uri = line.replace(/^[A-Za-z_][A-Za-z0-9_]*=/, "");
+            let url;
+            try {
+              url = new URL(uri);
+            } catch {
+              throw new Error(`${name} cannot be parsed as a PostgreSQL URI.`);
+            }
+
+            const username = decodeURIComponent(url.username || "");
+            const password = decodeURIComponent(url.password || "");
+            const host = url.hostname || "";
+            const database = (url.pathname || "").replace(/^\//, "");
+
+            if (![
+              "postgres:",
+              "postgresql:",
+            ].includes(url.protocol)) {
+              throw new Error(`${name} must use postgres:// or postgresql://.`);
+            }
+
+            if (!username) {
+              throw new Error(`${name} is missing the database username.`);
+            }
+
+            if (!password) {
+              throw new Error(`${name} is missing the database password.`);
+            }
+
+            if (!host) {
+              throw new Error(`${name} is missing the database hostname.`);
+            }
+
+            if (!database) {
+              throw new Error(`${name} is missing the database name.`);
+            }
+
+            console.log(`::add-mask::${password}`);
+
+            url.searchParams.delete("sslrootcert");
+            url.searchParams.set("sslmode", "require");
+            url.searchParams.set("uselibpqcompat", "true");
+
+            const cleanUrl = url.toString();
+            console.log(`::add-mask::${cleanUrl}`);
+
+            return {
+              name,
+              host,
+              user: username,
+              database,
+              connectionString: cleanUrl,
+            };
+          }
+
+          const configuredCandidates = [
+            ["MIGRATION_DATABASE_URL", process.env.MIGRATION_DATABASE_URL],
+            ["DATABASE_URL", process.env.DATABASE_URL],
+          ];
+          const providedCandidates = configuredCandidates.filter(([, value]) => (value || "").trim());
+
+          if (providedCandidates.length === 0) {
             stop("Set MIGRATION_DATABASE_URL or DATABASE_URL to a PostgreSQL connection URI.");
           }
 
-          console.log(`::add-mask::${raw}`);
+          const candidates = [];
+          const seenConnectionStrings = new Set();
+          const parseErrors = [];
 
-          const line = raw
-            .split(/\r?\n/)
-            .map((entry) => entry.trim())
-            .find((entry) => /^(?:[A-Za-z_][A-Za-z0-9_]*=)?postgres(?:ql)?:\/\//i.test(entry));
-
-          if (!line) {
-            stop("Migration database secret must contain a postgres:// or postgresql:// URI.");
+          for (const [name, value] of providedCandidates) {
+            try {
+              const candidate = parseCandidate(name, value);
+              if (candidate && !seenConnectionStrings.has(candidate.connectionString)) {
+                seenConnectionStrings.add(candidate.connectionString);
+                candidates.push(candidate);
+              }
+            } catch (error) {
+              parseErrors.push(`- ${error.message}`);
+            }
           }
 
-          const uri = line.replace(/^[A-Za-z_][A-Za-z0-9_]*=/, "");
-          let url;
-          try {
-            url = new URL(uri);
-          } catch {
-            stop("Migration database secret cannot be parsed as a PostgreSQL URI.");
+          if (candidates.length === 0) {
+            stop(parseErrors.join("\n"));
           }
-
-          const username = decodeURIComponent(url.username || "");
-          const password = decodeURIComponent(url.password || "");
-          const host = url.hostname || "";
-          const database = (url.pathname || "").replace(/^\//, "");
-
-          if (![
-            "postgres:",
-            "postgresql:",
-          ].includes(url.protocol)) {
-            stop("Migration database URI must use postgres:// or postgresql://.");
-          }
-
-          if (!username) {
-            stop("Database username is missing.");
-          }
-
-          if (!password) {
-            stop("Database password is missing.");
-          }
-
-          if (!host) {
-            stop("Database hostname is missing.");
-          }
-
-          if (!database) {
-            stop("Database name is missing.");
-          }
-
-          console.log(`::add-mask::${password}`);
-
-          url.searchParams.delete("sslrootcert");
-          url.searchParams.set("sslmode", "require");
-          url.searchParams.set("uselibpqcompat", "true");
-
-          const cleanUrl = url.toString();
-          console.log(`::add-mask::${cleanUrl}`);
 
           fs.appendFileSync(
             process.env.GITHUB_ENV,
-            `DATABASE_URL<<BLUEJOB_DATABASE\n${cleanUrl}\nBLUEJOB_DATABASE\n`,
+            `DATABASE_URL_CANDIDATES<<BLUEJOB_DATABASE\n${JSON.stringify(candidates)}\nBLUEJOB_DATABASE\n`,
           );
 
           console.log("");
           console.log("==========================================");
-          console.log(" BLUEJOB DATABASE TARGET");
+          console.log(" BLUEJOB DATABASE TARGETS");
           console.log("==========================================");
           console.log("Provider: PlanetScale PostgreSQL");
-          console.log("Host:", host);
-          console.log("User:", username);
-          console.log("Database:", database);
+          for (const candidate of candidates) {
+            console.log(`Source: ${candidate.name}`);
+            console.log("Host:", candidate.host);
+            console.log("User:", candidate.user);
+            console.log("Database:", candidate.database);
+          }
           console.log("Target schema: bluejob (must already exist on PlanetScale branch)");
-          console.log("Credential: MASKED");
+          console.log("Credential order:", candidates.map((candidate) => candidate.name).join(" -> "));
+          console.log("Credentials: MASKED");
           NODE
 
       - name: "BLUEJOB 5/7 — PlanetScale preflight"
         shell: bash
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL_CANDIDATES: ${{ env.DATABASE_URL_CANDIDATES }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           node <<'NODE'
+          const fs = require("fs");
           const { Client } = require("pg");
 
-          async function main() {
+          async function runPreflight(candidate) {
             console.log("");
             console.log("==========================================");
             console.log(" HITTING PLANETSCALE");
             console.log("==========================================");
-            console.log("[1] Authenticating...");
+            console.log(`[1] Authenticating with ${candidate.name}...`);
 
             const client = new Client({
-              connectionString: process.env.DATABASE_URL,
+              connectionString: candidate.connectionString,
               connectionTimeoutMillis: 15000,
               statement_timeout: 30000,
               ssl: { rejectUnauthorized: false },
@@ -206,17 +244,8 @@ jobs:
             try {
               await client.connect();
             } catch (error) {
-              console.error("");
-              console.error("❌ BLUEJOB AUTHENTICATION FAILED");
-              if (error.code === "28P01") {
-                console.error("PlanetScale rejected the username/password pair.");
-              } else {
-                console.error(error.message);
-              }
-              if (error.code) {
-                console.error("PostgreSQL code:", error.code);
-              }
-              process.exit(1);
+              error.stage = "authenticate";
+              throw error;
             }
 
             try {
@@ -276,20 +305,58 @@ jobs:
               console.log("✅ PLANETSCALE AUTHENTICATION PASSED");
               console.log("✅ MIGRATION SCHEMA ACCESS PASSED");
               console.log("✅ DATABASE CREATE TEST PASSED");
+              console.log(`✅ USING ${candidate.name}`);
               console.log("");
               console.log("DATABASE IS CLEARED FOR MIGRATION");
             } catch (error) {
-              console.error("");
-              console.error("❌ BLUEJOB DATABASE PREFLIGHT FAILED");
-              console.error(error.message);
-              if (error.code) {
-                console.error("PostgreSQL code:", error.code);
-              }
-              process.exitCode = 1;
+              error.stage ||= "preflight";
               throw error;
             } finally {
               await client.end();
             }
+          }
+
+          async function main() {
+            const candidates = JSON.parse(process.env.DATABASE_URL_CANDIDATES || "[]");
+            if (!Array.isArray(candidates) || candidates.length === 0) {
+              throw new Error("No migration database candidates were prepared.");
+            }
+
+            const failures = [];
+
+            for (const candidate of candidates) {
+              try {
+                await runPreflight(candidate);
+                fs.appendFileSync(
+                  process.env.GITHUB_ENV,
+                  `DATABASE_URL<<BLUEJOB_DATABASE\n${candidate.connectionString}\nBLUEJOB_DATABASE\n`,
+                );
+                return;
+              } catch (error) {
+                failures.push({
+                  name: candidate.name,
+                  stage: error.stage || "unknown",
+                  code: error.code || "",
+                  message: error.code === "28P01"
+                    ? "PlanetScale rejected the username/password pair."
+                    : error.message,
+                });
+
+                console.error("");
+                console.error(`⚠️ ${candidate.name} failed during ${error.stage || "preflight"}.`);
+                console.error(failures[failures.length - 1].message);
+                if (error.code) {
+                  console.error("PostgreSQL code:", error.code);
+                }
+              }
+            }
+
+            console.error("");
+            console.error("❌ BLUEJOB DATABASE PREFLIGHT FAILED");
+            for (const failure of failures) {
+              console.error(`- ${failure.name} (${failure.stage}): ${failure.message}${failure.code ? ` [${failure.code}]` : ""}`);
+            }
+            process.exit(1);
           }
 
           main().catch((error) => {
