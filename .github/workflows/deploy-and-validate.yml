@@ -9,9 +9,10 @@ permissions:
 jobs:
   deploy-and-validate:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFARE_API_KEY }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
@@ -34,6 +35,21 @@ jobs:
       - name: Install backend dependencies
         working-directory: server
         run: npm ci
+
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing Cloudflare credential. Add CLOUDFLARE_API_TOKEN or CLOUDFARE_API_KEY to the production environment."
+            exit 1
+          fi
+
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Missing CLOUDFLARE_ACCOUNT_ID in the production environment."
+            exit 1
+          fi
+
+          echo "Cloudflare deployment credentials are available."
 
       - name: Deploy backend worker
         working-directory: server
@@ -71,13 +87,23 @@ jobs:
               const c = cookieHeader();
               if (c) headers.Cookie = c;
             }
-            const res = await fetch(`${base}${path}`, { ...options, headers });
-            const setCookie = res.headers.get("set-cookie");
-            if (setCookie) parseCookie(setCookie);
-            const text = await res.text();
-            let body = {};
-            try { body = text ? JSON.parse(text) : {}; } catch {}
-            return { status: res.status, body, text };
+            for (let attempt = 1; attempt <= 10; attempt += 1) {
+              let res;
+              try {
+                res = await fetch(`${base}${path}`, { ...options, headers });
+              } catch (error) {
+                if (attempt === 10) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                continue;
+              }
+              const setCookie = res.headers.get("set-cookie");
+              if (setCookie) parseCookie(setCookie);
+              const text = await res.text();
+              let body = {};
+              try { body = text ? JSON.parse(text) : {}; } catch {}
+              if (res.status !== 503 || attempt === 10) return { status: res.status, body, text };
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
           }
 
           function pass(name, ok, detail = {}) {
