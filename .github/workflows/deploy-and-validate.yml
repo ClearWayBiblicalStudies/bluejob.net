@@ -12,7 +12,7 @@ jobs:
     environment: production
     timeout-minutes: 30
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFARE_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::Missing Cloudflare credential. Add CLOUDFLARE_API_TOKEN or CLOUDFARE_API_KEY to the production environment."
+            echo "::error::Missing Cloudflare credential. Add CLOUDFLARE_API_TOKEN or CLOUDFLARE_TOKEN to the production environment."
             exit 1
           fi
 
